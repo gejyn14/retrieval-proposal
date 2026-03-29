@@ -1,0 +1,36 @@
+/* 분배금 지급 처리 메인 */
+#include "proframe.h"
+#include "fd_pay_str.h"
+
+int FD_PAY_01(fd_pay_in_t *in, fd_pay_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    fund_cd[12];
+    double  dist_per_unit;
+    long    hold_qty;
+    char    pay_dt[9];
+    EXEC SQL END DECLARE SECTION;
+
+    /* 분배금 단가 조회 */
+    EXEC SQL SELECT DIST_AMT INTO :dist_per_unit
+        FROM TB_FUND_DIST
+        WHERE FUND_CD = :fund_cd
+        AND DIST_DT = :pay_dt
+        AND DIST_TP = 'CASH';
+
+    /* 보유좌수 기준 지급액 산출 */
+    out->gross_amt = hold_qty * dist_per_unit;
+
+    /* 세금 계산 */
+    FD_TAX_02(out->gross_amt, in->acct_type, &out->tax_amt);
+
+    /* KSD SAFE+ 연동 데이터 생성 */
+    FD_KSD_IF_01(in, out);
+
+    /* 원장 반영 */
+    EXEC SQL INSERT INTO TB_DIST_PAY_HST
+        (ACCT_NO, FUND_CD, PAY_DT, GROSS_AMT, TAX_AMT, NET_AMT)
+        VALUES (:in->acct_no, :fund_cd, :pay_dt,
+                :out->gross_amt, :out->tax_amt, :out->net_amt);
+
+    return SUCCESS;
+}

@@ -1,0 +1,29 @@
+/* 채권 수익률 계산 처리 - 매수단가 잔존기간 기반 단순 수익률 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int BN_YIELD_01(const char *bnd_cd, double price, double *yield) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_bnd[13];
+    double  v_coupon_rate;
+    char    v_mature_dt[9];
+    char    v_today[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_bnd, bnd_cd);
+
+    EXEC SQL SELECT COUPON_RATE, MATURE_DT INTO :v_coupon_rate, :v_mature_dt
+        FROM TB_BND_ISSUE WHERE BND_CD = :v_bnd;
+
+    EXEC SQL SELECT TO_CHAR(SYSDATE,'YYYYMMDD') INTO :v_today FROM DUAL;
+
+    int remain_days = CM_DATE_CHK(v_today, v_mature_dt);
+
+    /* 단순 수익률 = (쿠폰 + (100-매수가)) / 매수가 × (365/잔존일) */
+    double annual_coupon = v_coupon_rate * 100;
+    double capital_gain = 100.0 - price;
+    *yield = (annual_coupon + capital_gain * 365.0 / remain_days) / price;
+
+    return SUCCESS;
+}

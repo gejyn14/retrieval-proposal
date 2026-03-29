@@ -1,0 +1,40 @@
+/* SWIFT 해외 송금 인터페이스 처리 - 환율 조회, 송금 한도 확인, 전문 암호화 전송 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int IF_SWIFT_01(const char *acct_no, const char *swift_cd,
+                double amt, const char *cur_cd) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_swift[12];
+    double  v_fx_rate;
+    double  v_krw_amt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+    strcpy(v_swift, swift_cd);
+
+    /* 환율 조회 */
+    CM_RATE_01("FX", "", &v_fx_rate);
+    v_krw_amt = amt * v_fx_rate;
+
+    /* 송금 한도 확인 */
+    if (CM_LIMIT_CHK("SWIFT", v_acct, v_krw_amt) != SUCCESS) {
+        return FAIL;
+    }
+
+    /* SWIFT 전문 암호화 */
+    char enc_msg[256];
+    CM_CRYPTO_01(v_swift, enc_msg, "ENC");
+
+    /* 전문 전송 기록 */
+    EXEC SQL INSERT INTO TB_TX_HIST
+        (TX_NO, TX_DT, TX_TM, SVC_NM, ACCT_NO, TX_TP, TX_AMT, TX_DESC)
+        VALUES (SQ_TX_NO.NEXTVAL, TO_CHAR(SYSDATE,'YYYYMMDD'),
+                TO_CHAR(SYSDATE,'HH24MISS'), 'IF_SWIFT_01',
+                :v_acct, 'SWIFT', :v_krw_amt, 'SWIFT해외송금');
+
+    CM_LOG_01("IF_SWIFT_01", v_acct, "SWIFT송금");
+    return SUCCESS;
+}

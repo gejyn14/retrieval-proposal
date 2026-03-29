@@ -1,0 +1,44 @@
+/* 공매도 주문 처리 - 무보유 매도, 공매도 한도 및 리스크 익스포저 확인 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int ST_SHORT_01(const char *acct_no, const char *stk_cd,
+                double price, long qty) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_stk[7];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+    strcpy(v_stk, stk_cd);
+
+    double order_amt = price * qty;
+
+    /* 공매도 한도 체크 */
+    if (CM_LIMIT_CHK("SHORT", v_stk, order_amt) != SUCCESS) {
+        return FAIL;
+    }
+
+    /* 익스포저 확인 */
+    rm_exposure_in_t rm_in;
+    rm_exposure_out_t rm_out;
+    strcpy(rm_in.acct_no, v_acct);
+    RM_EXPOSURE_01(&rm_in, &rm_out);
+
+    if (rm_out.usage_rate > 90.0) {
+        return FAIL;  /* 리스크 한도 초과 */
+    }
+
+    /* 매도 주문으로 처리 */
+    st_sell_in_t sell_in;
+    st_sell_out_t sell_out;
+    strcpy(sell_in.acct_no, v_acct);
+    strcpy(sell_in.stk_cd, v_stk);
+    sell_in.price = price;
+    sell_in.qty = qty;
+    ST_SELL_01(&sell_in, &sell_out);
+
+    CM_LOG_01("ST_SHORT_01", v_acct, "공매도");
+    return SUCCESS;
+}

@@ -1,0 +1,47 @@
+/* 신용매수 주문 처리 - 신용 대출 실행 후 주식 매수 주문, 신용한도 체크 */
+#include "proframe.h"
+#include "st_credit_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int ST_CREDIT_01(st_credit_in_t *in, st_credit_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+
+    /* 신용한도 체크 */
+    double order_amt = in->price * in->qty;
+    if (CM_LIMIT_CHK("CREDIT", v_acct, order_amt) != SUCCESS) {
+        strcpy(out->err_cd, "E501");
+        strcpy(out->err_msg, "신용한도 초과");
+        return FAIL;
+    }
+
+    /* 신용 대출 실행 */
+    ln_credit_in_t ln_in;
+    ln_credit_out_t ln_out;
+    strcpy(ln_in.acct_no, v_acct);
+    strcpy(ln_in.loan_tp, "CRED");
+    ln_in.loan_amt = order_amt * 0.6;  /* 자기자금 40% */
+    ln_in.loan_days = in->credit_days;
+    LN_CREDIT_01(&ln_in, &ln_out);
+    out->loan_no = ln_out.loan_no;
+    out->loan_amt = ln_out.approved_amt;
+    out->int_rate = ln_out.int_rate;
+
+    /* 매수 주문 실행 */
+    st_buy_in_t buy_in;
+    st_buy_out_t buy_out;
+    strcpy(buy_in.acct_no, v_acct);
+    strcpy(buy_in.stk_cd, in->stk_cd);
+    buy_in.price = in->price;
+    buy_in.qty = in->qty;
+    strcpy(buy_in.credit_tp, "01");
+    ST_BUY_01(&buy_in, &buy_out);
+
+    out->ord_no = buy_out.ord_no;
+    out->margin_amt = buy_out.margin_amt;
+    return SUCCESS;
+}

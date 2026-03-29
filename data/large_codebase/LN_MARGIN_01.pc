@@ -1,0 +1,39 @@
+/* 담보 대출 처리 - 주식 담보 가치 평가, 담보비율 산정, 대출 실행 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int LN_MARGIN_01(const char *acct_no, double req_amt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    double  v_coll_val;
+    double  v_max_loan;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+
+    /* 담보 가치 평가 */
+    jg_asset_in_t asset_in;
+    jg_asset_out_t asset_out;
+    strcpy(asset_in.acct_no, v_acct);
+    JG_ASSET_01(&asset_in, &asset_out);
+
+    v_coll_val = asset_out.stk_eval;
+    v_max_loan = v_coll_val * 0.5;  /* 담보비율 50% */
+
+    if (req_amt > v_max_loan) {
+        return FAIL;  /* 담보 부족 */
+    }
+
+    /* 대출 실행 */
+    ln_credit_in_t ln_in;
+    ln_credit_out_t ln_out;
+    strcpy(ln_in.acct_no, v_acct);
+    strcpy(ln_in.loan_tp, "MRGN");
+    ln_in.loan_amt = req_amt;
+    strcpy(ln_in.coll_tp, "STK");
+    LN_CREDIT_01(&ln_in, &ln_out);
+
+    CM_LOG_01("LN_MARGIN_01", v_acct, "담보대출");
+    return SUCCESS;
+}

@@ -1,0 +1,32 @@
+/* 계좌 정보 변경 처리 - 계좌 유형 지점코드 등 계좌 마스터 정보 수정 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int AC_CHANGE_01(const char *acct_no, const char *field, const char *value) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_value[101];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+    strcpy(v_value, value);
+
+    if (CM_AUTH_01(v_acct, "", 2) != SUCCESS) {
+        return FAIL;
+    }
+
+    /* 변경 가능 필드만 허용 */
+    if (strcmp(field, "ACCT_TP") == 0) {
+        EXEC SQL UPDATE TB_ACCT_MST SET ACCT_TP = :v_value
+            WHERE ACCT_NO = :v_acct;
+    } else if (strcmp(field, "BRNCH_CD") == 0) {
+        EXEC SQL UPDATE TB_ACCT_MST SET BRNCH_CD = :v_value
+            WHERE ACCT_NO = :v_acct;
+    } else {
+        return FAIL;
+    }
+
+    CM_LOG_01("AC_CHANGE_01", v_acct, "계좌정보변경");
+    return SUCCESS;
+}

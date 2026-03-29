@@ -1,0 +1,66 @@
+/* 채권 매수 처리 - 채권 발행정보 조회, 경과이자 계산, 매수대금 산출, 잔고 등록 */
+#include "proframe.h"
+#include "bn_buy_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int BN_BUY_01(bn_buy_in_t *in, bn_buy_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_bnd[13];
+    double  v_coupon_rate;
+    char    v_issue_dt[9];
+    double  v_avail;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+    strcpy(v_bnd, in->bnd_cd);
+
+    /* 채권 발행 정보 조회 */
+    EXEC SQL SELECT COUPON_RATE, ISSUE_DT INTO :v_coupon_rate, :v_issue_dt
+        FROM TB_BND_ISSUE
+        WHERE BND_CD = :v_bnd AND USE_YN = 'Y';
+
+    if (SQLCA.sqlcode != 0) {
+        strcpy(out->err_cd, "E601");
+        strcpy(out->err_msg, "채권 정보 없음");
+        return FAIL;
+    }
+
+    /* 경과이자 계산 */
+    bn_coupon_in_t coupon_in;
+    bn_coupon_out_t coupon_out;
+    strcpy(coupon_in.bnd_cd, v_bnd);
+    coupon_in.face_amt = in->face_amt;
+    BN_ACCRUED_01(&coupon_in, &coupon_out);
+    out->accrued_int = coupon_out.accrued_int;
+
+    /* 매수금액 = 액면 × 매수단가 + 경과이자 */
+    out->buy_amt = in->face_amt * (in->price / 100.0);
+    out->total_amt = out->buy_amt + out->accrued_int;
+
+    /* 잔액 확인 */
+    EXEC SQL SELECT AVAIL_AMT INTO :v_avail
+        FROM TB_ACCT_BAL WHERE ACCT_NO = :v_acct;
+
+    if (v_avail < out->total_amt) {
+        strcpy(out->err_cd, "E602");
+        strcpy(out->err_msg, "주문가능금액 부족");
+        return FAIL;
+    }
+
+    /* 채권 잔고 등록 */
+    EXEC SQL INSERT INTO TB_BND_BAL
+        (ACCT_NO, BND_CD, HOLD_QTY, HOLD_AMT, BUY_PRICE, BUY_DT)
+        VALUES (:v_acct, :v_bnd, :in->face_amt, :out->total_amt,
+                :in->price, TO_CHAR(SYSDATE,'YYYYMMDD'));
+
+    /* 대금 차감 */
+    EXEC SQL UPDATE TB_ACCT_BAL
+        SET CASH_BAL = CASH_BAL - :out->total_amt,
+            AVAIL_AMT = AVAIL_AMT - :out->total_amt
+        WHERE ACCT_NO = :v_acct;
+
+    CM_LOG_01("BN_BUY_01", v_acct, "채권매수");
+    return SUCCESS;
+}

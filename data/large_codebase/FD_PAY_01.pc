@@ -1,0 +1,48 @@
+/* 분배금 지급 처리 - 펀드 분배금 단가 조회, 보유좌수 기준 지급액 산출, 과세, KSD 연동 */
+#include "proframe.h"
+#include "fd_pay_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int FD_PAY_01(fd_pay_in_t *in, fd_pay_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    fund_cd[13];
+    double  dist_per_unit;
+    long    hold_qty;
+    char    pay_dt[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(fund_cd, in->fund_cd);
+    strcpy(pay_dt, in->pay_dt);
+
+    /* 분배금 단가 조회 */
+    EXEC SQL SELECT DIST_AMT INTO :dist_per_unit
+        FROM TB_FUND_DIST
+        WHERE FUND_CD = :fund_cd
+        AND DIST_DT = :pay_dt
+        AND DIST_TP = 'CASH';
+
+    /* 보유좌수 조회 */
+    EXEC SQL SELECT HOLD_QTY INTO :hold_qty
+        FROM TB_FND_BAL
+        WHERE ACCT_NO = :in->acct_no AND FUND_CD = :fund_cd;
+
+    /* 보유좌수 기준 지급액 산출 */
+    out->gross_amt = hold_qty * dist_per_unit;
+
+    /* 세금 계산 */
+    FD_TAX_02(out->gross_amt, in->acct_type, &out->tax_amt);
+
+    out->net_amt = out->gross_amt - out->tax_amt;
+
+    /* KSD SAFE+ 연동 데이터 생성 */
+    FD_KSD_IF_01(in, out);
+
+    /* 원장 반영 */
+    EXEC SQL INSERT INTO TB_TX_HIST
+        (TX_NO, TX_DT, SVC_NM, ACCT_NO, TX_TP, TX_AMT, TX_DESC)
+        VALUES (SQ_TX_NO.NEXTVAL, :pay_dt, 'FD_PAY_01',
+                :in->acct_no, 'DIST_PAY', :out->net_amt, '분배금지급');
+
+    return SUCCESS;
+}

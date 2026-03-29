@@ -1,0 +1,19 @@
+/* KYC 적합성 검증 */
+#include "proframe.h"
+
+int AC_KYC_CHK(char *cust_no, int *result) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char cust[10];
+    int  kyc_level;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(cust, cust_no);
+
+    EXEC SQL SELECT KYC_LEVEL INTO :kyc_level
+        FROM TB_CUST_KYC
+        WHERE CUST_NO = :cust
+        AND EXPIRE_DT >= TO_CHAR(SYSDATE,'YYYYMMDD');
+
+    *result = kyc_level;
+    return SUCCESS;
+}

@@ -1,0 +1,30 @@
+/* 알림 발송 공통 처리 - 고객 SMS 이메일 알림 메시지 발송 큐 등록 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_NOTIFY_01(const char *cust_no, const char *msg_tp, const char *msg_body) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_cust[11];
+    char    v_email[101];
+    char    v_phone[21];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_cust, cust_no);
+
+    EXEC SQL SELECT EMAIL, PHONE INTO :v_email, :v_phone
+        FROM TB_CUST_MST
+        WHERE CUST_NO = :v_cust;
+
+    if (SQLCA.sqlcode != 0) {
+        return FAIL;
+    }
+
+    /* SMS/이메일 발송 큐 등록 */
+    EXEC SQL INSERT INTO TB_NOTIFY_QUEUE
+        (SEQ, CUST_NO, MSG_TP, MSG_BODY, SEND_ST, REG_DT)
+        VALUES (SQ_NOTIFY.NEXTVAL, :v_cust, :msg_tp, :msg_body,
+                '00', TO_CHAR(SYSDATE,'YYYYMMDD'));
+
+    return SUCCESS;
+}

@@ -1,0 +1,55 @@
+/* 채권 매도 처리 - 보유 채권 매도, 경과이자 정산, 양도차익 세금 계산 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int BN_SELL_01(const char *acct_no, const char *bnd_cd,
+               double face_amt, double sell_price) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_bnd[13];
+    double  v_hold_qty;
+    double  v_buy_price;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+    strcpy(v_bnd, bnd_cd);
+
+    /* 보유 확인 */
+    EXEC SQL SELECT HOLD_QTY, BUY_PRICE INTO :v_hold_qty, :v_buy_price
+        FROM TB_BND_BAL
+        WHERE ACCT_NO = :v_acct AND BND_CD = :v_bnd;
+
+    if (v_hold_qty < face_amt) {
+        return FAIL;
+    }
+
+    /* 경과이자 계산 */
+    bn_coupon_in_t coupon_in;
+    bn_coupon_out_t coupon_out;
+    strcpy(coupon_in.bnd_cd, v_bnd);
+    coupon_in.face_amt = face_amt;
+    BN_ACCRUED_01(&coupon_in, &coupon_out);
+
+    double sell_amt = face_amt * (sell_price / 100.0) + coupon_out.accrued_int;
+    double profit = sell_amt - (face_amt * (v_buy_price / 100.0));
+
+    /* 양도세 계산 */
+    double tax = 0;
+    if (profit > 0) {
+        CM_TAX_01(profit, &tax);
+    }
+
+    /* 잔고 차감 */
+    EXEC SQL UPDATE TB_BND_BAL
+        SET HOLD_QTY = HOLD_QTY - :face_amt
+        WHERE ACCT_NO = :v_acct AND BND_CD = :v_bnd;
+
+    /* 대금 입금 */
+    EXEC SQL UPDATE TB_ACCT_BAL
+        SET CASH_BAL = CASH_BAL + :sell_amt - :tax
+        WHERE ACCT_NO = :v_acct;
+
+    CM_LOG_01("BN_SELL_01", v_acct, "채권매도");
+    return SUCCESS;
+}

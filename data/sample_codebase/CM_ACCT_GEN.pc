@@ -1,0 +1,17 @@
+/* 계좌번호 채번 */
+#include "proframe.h"
+
+int CM_ACCT_GEN(char *brnch_cd, char *new_acct) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char acct[11];
+    char brnch[4];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(brnch, brnch_cd);
+
+    EXEC SQL SELECT :brnch || LPAD(SQ_ACCT_NO.NEXTVAL, 7, '0')
+        INTO :acct FROM DUAL;
+
+    strcpy(new_acct, acct);
+    return SUCCESS;
+}

@@ -1,0 +1,38 @@
+/* 채권 시가평가 처리 - 시장금리 기반 현재가치 할인 평가, 보유 채권 평가액 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int BN_VALUATION_01(const char *bnd_cd, const char *base_dt, double *eval_price) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_bnd[13];
+    char    v_dt[9];
+    double  v_market_yield;
+    double  v_coupon_rate;
+    char    v_mature_dt[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_bnd, bnd_cd);
+    strcpy(v_dt, base_dt);
+
+    EXEC SQL SELECT COUPON_RATE, MATURE_DT INTO :v_coupon_rate, :v_mature_dt
+        FROM TB_BND_ISSUE WHERE BND_CD = :v_bnd;
+
+    /* 시장금리 조회 */
+    CM_RATE_01("BOND_YIELD", v_dt, &v_market_yield);
+
+    /* 잔존 기간 */
+    int remain_days = CM_DATE_CHK(v_dt, v_mature_dt);
+    double years = remain_days / 365.0;
+
+    /* 현재가치 할인 (단순 계산) */
+    double yield_used;
+    BN_YIELD_01(v_bnd, 100.0, &yield_used);
+
+    /* PV = C/(1+r) + C/(1+r)^2 + ... + (C+F)/(1+r)^n */
+    *eval_price = 100.0 * v_coupon_rate / v_market_yield *
+                  (1 - 1.0 / pow(1 + v_market_yield, years)) +
+                  100.0 / pow(1 + v_market_yield, years);
+
+    return SUCCESS;
+}

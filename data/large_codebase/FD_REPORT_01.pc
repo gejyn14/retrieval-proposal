@@ -1,0 +1,36 @@
+/* 펀드 운용 보고서 생성 처리 - 기준가 추이, 투자자수, 운용 현황 리포트 산출 */
+#include "proframe.h"
+#include "jg_bal_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int FD_REPORT_01(const char *fund_cd, const char *base_dt, void *report) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_fund[13];
+    char    v_dt[9];
+    double  v_nav;
+    double  v_prev_nav;
+    double  v_tot_asset;
+    int     v_investor_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_fund, fund_cd);
+    strcpy(v_dt, base_dt);
+
+    /* 기준가 추이 */
+    double nav;
+    FD_NAV_01(v_fund, &nav);
+
+    EXEC SQL SELECT NAV INTO :v_prev_nav
+        FROM TB_FND_NAV
+        WHERE FUND_CD = :v_fund
+        AND BASE_DT = (SELECT MAX(BASE_DT) FROM TB_FND_NAV
+                        WHERE FUND_CD = :v_fund AND BASE_DT < :v_dt);
+
+    /* 투자자 수 */
+    EXEC SQL SELECT COUNT(DISTINCT ACCT_NO) INTO :v_investor_cnt
+        FROM TB_FND_BAL
+        WHERE FUND_CD = :v_fund AND HOLD_QTY > 0;
+
+    return SUCCESS;
+}

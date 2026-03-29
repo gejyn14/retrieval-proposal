@@ -1,0 +1,63 @@
+/* 고객 등급 산정 배치 처리 - 총자산 거래건수 기준 VIP 우수 일반 등급 재산정 */
+#include "proframe.h"
+#include "ac_grade_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int AC_GRADE_01(ac_grade_in_t *in, ac_grade_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_cust[11];
+    char    v_base_dt[9];
+    double  v_total_asset;
+    int     v_tx_count;
+    char    v_prev_grade[3];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_cust, in->cust_no);
+    strcpy(v_base_dt, in->base_dt);
+
+    /* 기존 등급 */
+    EXEC SQL SELECT GRADE_CD INTO :v_prev_grade
+        FROM TB_CUST_MST WHERE CUST_NO = :v_cust;
+    strcpy(out->prev_grade, v_prev_grade);
+
+    /* 총 자산 집계 */
+    EXEC SQL SELECT NVL(SUM(EVAL_AMT),0) INTO :v_total_asset
+        FROM (
+            SELECT EVAL_AMT FROM TB_STK_BAL WHERE ACCT_NO IN
+                (SELECT ACCT_NO FROM TB_ACCT_MST WHERE CUST_NO = :v_cust)
+            UNION ALL
+            SELECT EVAL_AMT FROM TB_BND_BAL WHERE ACCT_NO IN
+                (SELECT ACCT_NO FROM TB_ACCT_MST WHERE CUST_NO = :v_cust)
+            UNION ALL
+            SELECT EVAL_AMT FROM TB_FND_BAL WHERE ACCT_NO IN
+                (SELECT ACCT_NO FROM TB_ACCT_MST WHERE CUST_NO = :v_cust)
+        );
+    out->total_asset = v_total_asset;
+
+    /* 거래 건수 */
+    EXEC SQL SELECT COUNT(*) INTO :v_tx_count
+        FROM TB_TX_HIST
+        WHERE ACCT_NO IN (SELECT ACCT_NO FROM TB_ACCT_MST WHERE CUST_NO = :v_cust)
+        AND TX_DT >= TO_CHAR(ADD_MONTHS(TO_DATE(:v_base_dt,'YYYYMMDD'),-3),'YYYYMMDD');
+    out->tx_count = v_tx_count;
+
+    /* 등급 산정: VIP(01) > 우수(02) > 일반(03) > 관리(04) > 신규(05) */
+    if (v_total_asset >= 1000000000 && v_tx_count >= 50)
+        strcpy(out->new_grade, "01");
+    else if (v_total_asset >= 300000000 && v_tx_count >= 20)
+        strcpy(out->new_grade, "02");
+    else if (v_total_asset >= 50000000)
+        strcpy(out->new_grade, "03");
+    else if (v_tx_count < 3)
+        strcpy(out->new_grade, "05");
+    else
+        strcpy(out->new_grade, "04");
+
+    /* 등급 갱신 */
+    EXEC SQL UPDATE TB_CUST_MST SET GRADE_CD = :out->new_grade
+        WHERE CUST_NO = :v_cust;
+
+    CM_LOG_01("AC_GRADE_01", v_cust, "등급산정");
+    return SUCCESS;
+}

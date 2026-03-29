@@ -1,0 +1,27 @@
+/* 암호화 복호화 공통 처리 - 개인정보 계좌번호 암호화 및 복호화 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_CRYPTO_01(const char *plain, char *cipher, const char *direction) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_plain[256];
+    char    v_cipher[256];
+    char    v_dir[4];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_plain, plain);
+    strcpy(v_dir, direction);
+
+    if (strcmp(v_dir, "ENC") == 0) {
+        EXEC SQL SELECT CRYPTO_ENC(:v_plain) INTO :v_cipher FROM DUAL;
+    } else {
+        EXEC SQL SELECT CRYPTO_DEC(:v_plain) INTO :v_cipher FROM DUAL;
+    }
+
+    if (SQLCA.sqlcode != 0) {
+        return FAIL;
+    }
+    strcpy(cipher, v_cipher);
+    return SUCCESS;
+}

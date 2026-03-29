@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "proc-retrieval": {
+      "command": "python",
+      "args": ["src/mcp_server/server.py"],
+      "cwd": "/Users/yujin-an/dev/retrieval"
+    },
+    "svn-bridge": {
+      "command": "python",
+      "args": ["src/mcp_svn/server.py"],
+      "cwd": "/Users/yujin-an/dev/retrieval",
+      "env": {
+        "SVN_WORKING_COPY": "/path/to/svn/checkout"
+      }
+    }
+  }
+}

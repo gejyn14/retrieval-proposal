@@ -1,0 +1,39 @@
+/* 배당금 재투자 처리 - 배당금으로 동일 종목 시장가 매수 주문 자동 실행 */
+#include "proframe.h"
+#include "st_buy_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int DV_REINVEST_01(const char *acct_no, const char *stk_cd,
+                   double div_amt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_stk[7];
+    double  v_price;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_stk, stk_cd);
+
+    /* 현재가 조회 */
+    double cur_price, prev_close;
+    ST_PRICE_01(v_stk, &cur_price, &prev_close);
+
+    /* 재투자 수량 (단주 절사) */
+    long reinvest_qty = (long)(div_amt / cur_price);
+    if (reinvest_qty <= 0) {
+        return SUCCESS;  /* 재투자 불가 (금액 부족) */
+    }
+
+    /* 매수 주문 */
+    st_buy_in_t buy_in;
+    st_buy_out_t buy_out;
+    strcpy(buy_in.acct_no, acct_no);
+    strcpy(buy_in.stk_cd, stk_cd);
+    buy_in.price = cur_price;
+    buy_in.qty = reinvest_qty;
+    strcpy(buy_in.ord_type, "01");  /* 시장가 */
+
+    ST_BUY_01(&buy_in, &buy_out);
+
+    CM_LOG_01("DV_REINVEST_01", acct_no, "배당재투자");
+    return SUCCESS;
+}

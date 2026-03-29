@@ -1,0 +1,31 @@
+/* 이표 쿠폰 금액 계산 처리 - 채권 이표기간 쿠폰 금액 및 경과이자 산출 */
+#include "proframe.h"
+#include "bn_coupon_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int BN_COUPON_01(bn_coupon_in_t *in, bn_coupon_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_bnd[13];
+    double  v_coupon_rate;
+    int     v_freq;
+    char    v_issue_dt[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_bnd, in->bnd_cd);
+
+    EXEC SQL SELECT COUPON_RATE, COUPON_FREQ, ISSUE_DT
+        INTO :v_coupon_rate, :v_freq, :v_issue_dt
+        FROM TB_BND_ISSUE WHERE BND_CD = :v_bnd;
+
+    /* 이표 기간 일수 */
+    out->accrued_days = CM_DATE_CHK(in->from_dt, in->to_dt);
+
+    /* 이표 금액 = 액면 × 쿠폰율 / 횟수 */
+    out->coupon_amt = in->face_amt * (v_coupon_rate / v_freq);
+
+    /* 경과이자 = 액면 × 쿠폰율 × (경과일 / 365) */
+    out->accrued_int = in->face_amt * v_coupon_rate * out->accrued_days / 365.0;
+
+    return SUCCESS;
+}

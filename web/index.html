@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pro*C Code Retrieval</title>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #09090b; --surface: #131316; --raised: #1a1a1e; --border: #252529;
+  --red: #ef4444; --green: #22c55e; --amber: #f59e0b; --blue: #60a5fa; --purple: #a78bfa; --cyan: #22d3ee;
+  --text-h: #fafafa; --text-p: #d4d4d8; --text-s: #a1a1aa; --text-d: #52525b;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Pretendard', -apple-system, sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text-p);font-family:var(--sans);min-height:100vh}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#333;border-radius:2px}
+button{cursor:pointer;font-family:var(--sans)}
+.container{max-width:1200px;margin:0 auto;padding:24px}
+header{margin-bottom:20px;display:flex;align-items:center;gap:16px}
+h1{font-size:22px;font-weight:800;color:var(--text-h);letter-spacing:-0.03em}
+.badge{font:600 10px/1 var(--mono);letter-spacing:0.1em;padding:4px 8px;border-radius:4px}
+.badge-amber{color:var(--amber);background:rgba(245,158,11,.12)}
+.badge-green{color:var(--green);background:rgba(34,197,94,.12)}
+.tabs{display:flex;gap:2px;background:var(--surface);border-radius:8px;padding:3px;margin-bottom:20px;border:1px solid var(--border)}
+.tab{padding:10px 20px;border-radius:6px;font:600 13px var(--sans);color:var(--text-s);background:transparent;border:none;transition:.2s}
+.tab:hover{color:var(--text-p)}
+.tab.active{background:var(--raised);color:var(--text-h)}
+.search-bar{display:flex;gap:8px;margin-bottom:20px}
+.search-input{flex:1;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text-h);font:400 14px var(--sans);outline:none}
+.search-input:focus{border-color:var(--amber)}
+.search-input::placeholder{color:var(--text-d)}
+.search-btn{padding:12px 24px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:var(--amber);font:600 13px var(--sans);transition:.2s}
+.search-btn:hover{background:rgba(245,158,11,.25)}
+.panel{display:none}.panel.active{display:block}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.card-title{font:700 15px var(--sans);color:var(--text-h);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.tag-sm{font:600 10px/1 var(--mono);padding:3px 6px;border-radius:3px;letter-spacing:.05em}
+.tag-green{color:var(--green);background:rgba(34,197,94,.1)}
+.tag-blue{color:var(--blue);background:rgba(96,165,250,.1)}
+.tag-red{color:var(--red);background:rgba(239,68,68,.1)}
+.tag-purple{color:var(--purple);background:rgba(167,139,250,.1)}
+.tag-amber{color:var(--amber);background:rgba(245,158,11,.1)}
+.tag-cyan{color:var(--cyan);background:rgba(34,211,238,.1)}
+.code-block{background:#0d1117;border:1px solid #1e2530;border-radius:6px;padding:12px 16px;margin:8px 0;font:13px/1.6 var(--mono);color:#e6edf3;overflow-x:auto;white-space:pre-wrap;max-height:400px;overflow-y:auto}
+
+/* Step indicator */
+.step{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 16px;background:var(--raised);border-radius:8px;border:1px solid var(--border)}
+.step-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 12px var(--mono);flex-shrink:0}
+.step-1 .step-num{background:rgba(245,158,11,.2);color:var(--amber)}
+.step-2 .step-num{background:rgba(34,197,94,.2);color:var(--green)}
+.step-label{font:600 13px var(--sans);color:var(--text-h)}
+.step-desc{font:12px var(--sans);color:var(--text-s)}
+.step-time{font:600 11px var(--mono);color:var(--text-d);margin-left:auto}
+
+/* File list */
+.file-item{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font:13px var(--sans);color:var(--text-p);transition:.15s}
+.file-item:last-child{border-bottom:none}
+.file-name{font:600 13px var(--mono);color:var(--blue);min-width:160px}
+.file-role{color:var(--text-s);flex:1;font-size:12px}
+.file-load-btn{padding:4px 10px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:4px;color:var(--green);font:600 10px var(--mono);cursor:pointer;transition:.2s}
+.file-load-btn:hover{background:rgba(34,197,94,.2)}
+.file-load-btn.loaded{background:rgba(34,197,94,.05);color:var(--text-d);border-color:var(--border);cursor:default}
+
+/* Impact */
+.impact-item{padding:8px 12px;display:flex;align-items:center;gap:8px;font:13px var(--sans)}
+.impact-name{font:600 13px var(--mono);color:var(--red);cursor:pointer}
+.impact-name:hover{text-decoration:underline}
+.impact-desc{color:var(--text-s);font-size:12px}
+
+/* Flow */
+.flow-step{padding:4px 0;font:13px var(--mono)}
+.flow-sql{color:var(--amber);font-size:11px;margin-left:8px}
+
+/* Service grid */
+.svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px}
+.svc-card{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:14px;cursor:pointer;transition:.2s}
+.svc-card:hover{border-color:var(--amber);transform:translateY(-1px)}
+.svc-name{font:700 13px var(--mono);color:var(--blue);margin-bottom:4px}
+.svc-desc{font:12px var(--sans);color:var(--text-s);line-height:1.4}
+
+.loading{text-align:center;padding:40px;color:var(--text-d);font:13px var(--sans)}
+.empty{text-align:center;padding:60px;color:var(--text-d);font:14px var(--sans)}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Pro*C Code Retrieval</h1>
+    <span class="badge badge-amber">STRUCTURAL</span>
+    <span class="badge badge-green">REPO READ</span>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('search')">Search</button>
+    <button class="tab" onclick="switchTab('function')">Function</button>
+    <button class="tab" onclick="switchTab('impact')">Impact</button>
+    <button class="tab" onclick="switchTab('flow')">Flow</button>
+    <button class="tab" onclick="switchTab('services')">Services</button>
+  </div>
+
+  <div id="panel-search" class="panel active">
+    <div class="search-bar">
+      <input class="search-input" id="search-input" placeholder="업무 설명으로 검색 (예: 환매 수수료 계산, 반대매매 처리)" onkeydown="if(event.key==='Enter')doSearch()">
+      <button class="search-btn" onclick="doSearch()">검색</button>
+    </div>
+    <div id="search-result"></div>
+  </div>
+
+  <div id="panel-function" class="panel">
+    <div class="search-bar">
+      <input class="search-input" id="func-input" placeholder="함수명 입력 (예: RD_FEE_03)" onkeydown="if(event.key==='Enter')doFunction()">
+      <button class="search-btn" onclick="doFunction()">조회</button>
+    </div>
+    <div id="func-result"></div>
+  </div>
+
+  <div id="panel-impact" class="panel">
+    <div class="search-bar">
+      <input class="search-input" id="impact-input" placeholder="함수명 또는 테이블명 (예: CM_TAX_01, TB_FEE_RATE)" onkeydown="if(event.key==='Enter')doImpact()">
+      <button class="search-btn" onclick="doImpact()">영향도 분석</button>
+    </div>
+    <div id="impact-result"></div>
+  </div>
+
+  <div id="panel-flow" class="panel">
+    <div class="search-bar">
+      <input class="search-input" id="flow-input" placeholder="진입점 함수명 (예: FD_PAY_01, ST_BUY_01)" onkeydown="if(event.key==='Enter')doFlow()">
+      <button class="search-btn" onclick="doFlow()">업무 흐름</button>
+    </div>
+    <div id="flow-result"></div>
+  </div>
+
+  <div id="panel-services" class="panel">
+    <div id="services-list"><div class="loading">로딩 중...</div></div>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => {
+    const n = t.textContent.toLowerCase();
+    t.classList.toggle('active', n === name || (name === 'flow' && n === 'flow'));
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'services') loadServices();
+}
+
+function showFunction(name) {
+  document.getElementById('func-input').value = name;
+  switchTab('function');
+  doFunction();
+}
+function showImpact(name) {
+  document.getElementById('impact-input').value = name;
+  switchTab('impact');
+  doImpact();
+}
+function showFlow(name) {
+  document.getElementById('flow-input').value = name;
+  switchTab('flow');
+  doFlow();
+}
+
+// ── Load file from repo ──
+async function loadFile(filename, containerId) {
+  const btn = event?.target;
+  if (btn) { btn.textContent = '로딩...'; btn.disabled = true; }
+  const res = await fetch(API + `/api/file/${filename}`);
+  const data = await res.json();
+  const container = document.getElementById(containerId);
+  if (data.error) {
+    container.innerHTML = `<div style="color:var(--red);font:12px var(--mono);padding:8px">${data.error} — svn_cat 필요</div>`;
+  } else {
+    container.innerHTML = `<div class="code-block">${highlightSQL(esc(data.content))}</div>`;
+  }
+  if (btn) { btn.textContent = 'loaded'; btn.classList.add('loaded'); }
+}
+
+// ── Search ──
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  const el = document.getElementById('search-result');
+  el.innerHTML = '<div class="loading">검색 중...</div>';
+  const t0 = performance.now();
+  const res = await fetch(API + '/api/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:q})});
+  const data = await res.json();
+  const ms = Math.round(performance.now() - t0);
+
+  if (!data.matched_function) { el.innerHTML = '<div class="empty">결과 없음</div>'; return; }
+
+  let html = `<div class="step step-1">
+    <div class="step-num">1</div>
+    <div><div class="step-label">proc-retrieval.search_code("${esc(q)}")</div>
+    <div class="step-desc">구조 정보 반환 — 코드 body 없음, 파일 경로만</div></div>
+    <div class="step-time">${ms}ms</div>
+  </div>`;
+
+  html += `<div class="card">
+    <div class="card-title">${data.matched_function} <span class="tag-sm tag-amber">${(data.description||'').slice(0,50)}</span></div>`;
+
+  if (data.call_graph) {
+    const cg = data.call_graph;
+    html += '<div style="margin:8px 0;font:12px var(--mono)">';
+    if (cg.called_by?.length) html += `<span style="color:var(--text-d)">← ${cg.called_by.join(', ')}</span> `;
+    html += `<span style="color:var(--amber);font-weight:600">${cg.entry}</span>`;
+    if (cg.calls?.length) html += ` <span style="color:var(--text-d)">→ ${cg.calls.join(', ')}</span>`;
+    html += '</div>';
+  }
+  if (data.tables_used?.length) html += `<div style="font:11px var(--mono);color:var(--text-d)">Tables: ${data.tables_used.join(', ')}</div>`;
+
+  html += `<div style="margin-top:12px;display:flex;gap:8px">
+    <button class="search-btn" onclick="showFunction('${data.matched_function}')" style="font-size:11px;padding:6px 12px">상세 + 코드 로드</button>
+    <button class="search-btn" onclick="showImpact('${data.matched_function}')" style="font-size:11px;padding:6px 12px">영향도</button>
+    <button class="search-btn" onclick="showFlow('${data.matched_function}')" style="font-size:11px;padding:6px 12px">업무 흐름</button>
+  </div></div>`;
+
+  if (data.related_files?.length) {
+    html += '<div class="card"><div class="card-title">Related Files <span class="tag-sm tag-blue">' + data.related_files.length + '개 경로</span></div>';
+    for (const f of data.related_files) {
+      const roleTag = f.role.includes('진입점') ? 'tag-amber' : f.role.includes('구조체') ? 'tag-purple' : f.role.includes('DDL') ? 'tag-blue' : 'tag-green';
+      html += `<div class="file-item">
+        <span class="file-name">${f.filename}</span>
+        <span class="tag-sm ${roleTag}">${f.role.split('(')[0].trim()}</span>
+        <span class="file-role">${f.role}</span>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+// ── Function (2-step: structure → code load) ──
+async function doFunction() {
+  const name = document.getElementById('func-input').value.trim().toUpperCase();
+  if (!name) return;
+  const el = document.getElementById('func-result');
+  el.innerHTML = '<div class="loading">구조 조회 중...</div>';
+
+  const t0 = performance.now();
+  const res = await fetch(API + `/api/function/${name}`);
+  const data = await res.json();
+  const ms = Math.round(performance.now() - t0);
+
+  if (data.error) { el.innerHTML = `<div class="empty">${data.error}</div>`; return; }
+
+  // Step 1: 구조 정보
+  let html = `<div class="step step-1">
+    <div class="step-num">1</div>
+    <div><div class="step-label">proc-retrieval.get_function("${name}")</div>
+    <div class="step-desc">MCP → 구조 정보 + 파일 경로 반환 (코드 없음)</div></div>
+    <div class="step-time">${ms}ms</div>
+  </div>`;
+
+  html += `<div class="card">
+    <div class="card-title">${data.name} <span class="tag-sm tag-amber">구조 정보</span></div>
+    <div style="font:13px var(--sans);color:var(--text-s);margin-bottom:12px">${data.description}</div>`;
+
+  if (data.call_graph) {
+    const cg = data.call_graph;
+    html += '<div style="margin:8px 0;font:12px var(--mono)">';
+    if (cg.called_by?.length) html += `<span style="color:var(--text-d)">← ${cg.called_by.join(', ')}</span> `;
+    html += `<span style="color:var(--amber);font-weight:600">${name}</span>`;
+    if (cg.calls?.length) html += ` <span style="color:var(--text-d)">→ ${cg.calls.join(', ')}</span>`;
+    html += '</div>';
+  }
+  if (data.tables?.length) html += `<div style="font:11px var(--mono);color:var(--text-d);margin-bottom:8px">Tables: ${data.tables.join(', ')}</div>`;
+  html += '</div>';
+
+  // Step 2: 파일 로드
+  const allFiles = [];
+  allFiles.push({name: data.file_path, role: '메인 함수', tag: 'tag-amber'});
+  for (const f of (data.struct_files||[])) allFiles.push({name: f, role: '입출력 구조체', tag: 'tag-purple'});
+  for (const f of (data.dependency_files||[])) allFiles.push({name: f, role: '호출 함수', tag: 'tag-green'});
+  for (const f of (data.ddl_files||[])) allFiles.push({name: f, role: '테이블 DDL', tag: 'tag-blue'});
+
+  html += `<div class="step step-2">
+    <div class="step-num">2</div>
+    <div><div class="step-label">Read / svn_cat</div>
+    <div class="step-desc">Repo에서 실제 코드 로드 — 필요한 파일만 선택적으로</div></div>
+  </div>`;
+
+  html += '<div class="card"><div class="card-title">Files to Read <span class="tag-sm tag-green">' + allFiles.length + '개</span></div>';
+
+  for (let i = 0; i < allFiles.length; i++) {
+    const f = allFiles[i];
+    const cid = `code-${i}`;
+    html += `<div>
+      <div class="file-item">
+        <span class="file-name">${f.name}</span>
+        <span class="tag-sm ${f.tag}">${f.role}</span>
+        <button class="file-load-btn" onclick="loadFile('${f.name}','${cid}')">Read</button>
+      </div>
+      <div id="${cid}"></div>
+    </div>`;
+  }
+  html += '</div>';
+
+  // Action buttons
+  html += `<div style="display:flex;gap:8px;margin-top:8px">
+    <button class="search-btn" onclick="loadAllFiles()" style="font-size:11px;padding:6px 12px">전체 코드 로드</button>
+    <button class="search-btn" onclick="showImpact('${name}')" style="font-size:11px;padding:6px 12px">영향도 분석</button>
+    <button class="search-btn" onclick="showFlow('${name}')" style="font-size:11px;padding:6px 12px">업무 흐름</button>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+async function loadAllFiles() {
+  const btns = document.querySelectorAll('.file-load-btn:not(.loaded)');
+  for (const btn of btns) { btn.click(); await new Promise(r => setTimeout(r, 50)); }
+}
+
+// ── Impact ──
+async function doImpact() {
+  const name = document.getElementById('impact-input').value.trim().toUpperCase();
+  if (!name) return;
+  const el = document.getElementById('impact-result');
+  el.innerHTML = '<div class="loading">분석 중...</div>';
+  const res = await fetch(API + `/api/impact/${name}`);
+  const data = await res.json();
+  if (data.type === 'unknown') { el.innerHTML = '<div class="empty">찾을 수 없습니다</div>'; return; }
+
+  let html = `<div class="card">
+    <div class="card-title">Impact: ${data.name}
+      <span class="tag-sm tag-red">${data.affected_count}개 영향</span>
+      <span class="tag-sm ${data.type==='function'?'tag-green':'tag-blue'}">${data.type}</span>
+    </div>
+    <div style="font:13px var(--sans);color:var(--text-s);margin-bottom:16px">${data.description || data.comment || ''}</div>`;
+
+  const byDepth = {};
+  for (const s of data.affected_services || []) (byDepth[s.depth] = byDepth[s.depth] || []).push(s);
+
+  for (const d of Object.keys(byDepth).sort((a,b)=>a-b)) {
+    const label = d == 0 ? '직접 사용' : d == 1 ? '직접 호출자' : `${d}단계 상위`;
+    html += `<div style="font:600 12px var(--sans);color:var(--amber);margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)">${label}</div>`;
+    for (const s of byDepth[d]) {
+      html += `<div class="impact-item">
+        <span class="impact-name" onclick="showFunction('${s.name}')">${s.name}</span>
+        ${s.operation ? `<span class="tag-sm tag-purple">${s.operation}</span>` : ''}
+        <span class="impact-desc">${(s.description||'').slice(0,50)}</span>
+      </div>`;
+    }
+  }
+  if (!data.affected_services?.length) html += '<div class="empty">영향 받는 서비스 없음</div>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ── Business Flow ──
+async function doFlow() {
+  const name = document.getElementById('flow-input').value.trim().toUpperCase();
+  if (!name) return;
+  const el = document.getElementById('flow-result');
+  el.innerHTML = '<div class="loading">흐름 조회 중...</div>';
+  const res = await fetch(API + `/api/flow/${name}`);
+  const data = await res.json();
+  if (!data.steps?.length) { el.innerHTML = '<div class="empty">찾을 수 없습니다</div>'; return; }
+
+  let html = `<div class="card"><div class="card-title">Business Flow: ${data.entry} <span class="tag-sm tag-cyan">${(data.description||'').slice(0,40)}</span></div>`;
+  for (const s of data.steps) {
+    const indent = '&nbsp;'.repeat(s.depth * 4);
+    const arrow = s.depth > 0 ? '└─ ' : '';
+    html += `<div class="flow-step">${indent}${arrow}<span style="color:var(--green);cursor:pointer" onclick="showFunction('${s.name}')">${s.name}</span> <span style="color:var(--text-s);font-size:11px">${(s.description||'').slice(0,30)}</span>`;
+    for (const sq of s.sql_operations || []) {
+      html += `<span class="flow-sql">[${sq.operation} ${sq.table}]</span>`;
+    }
+    html += '</div>';
+  }
+  if (data.tables_touched?.length) {
+    html += `<div style="margin-top:16px;font:12px var(--mono);color:var(--text-d)">Tables: ${data.tables_touched.join(', ')}</div>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ── Services ──
+async function loadServices() {
+  const el = document.getElementById('services-list');
+  const res = await fetch(API + '/api/services');
+  const data = await res.json();
+  let html = '<div class="svc-grid">';
+  for (const s of data) {
+    html += `<div class="svc-card" onclick="showFunction('${s.name}')">
+      <div class="svc-name">${s.name}</div>
+      <div class="svc-desc">${s.description || ''}</div>
+    </div>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function highlightSQL(code) {
+  return code
+    .replace(/(EXEC\s+SQL[\s\S]*?;)/g, '<span style="color:#f59e0b;font-weight:600">$1</span>')
+    .replace(/(\/\*.*?\*\/)/g, '<span style="color:#6b7280;font-style:italic">$1</span>')
+    .replace(/\b([A-Z][A-Z0-9_]{2,})\s*\(/g, '<span style="color:#22c55e">$1</span>(');
+}
+</script>
+</body>
+</html>

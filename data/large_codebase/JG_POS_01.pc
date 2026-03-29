@@ -1,0 +1,26 @@
+/* 포지션 상세 조회 처리 - 자산유형별 보유 종목 수 및 상세 포지션 조회 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int JG_POS_01(const char *acct_no, const char *asset_tp, void *positions) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    int     v_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+
+    if (strcmp(asset_tp, "STK") == 0) {
+        EXEC SQL SELECT COUNT(*) INTO :v_cnt
+            FROM TB_STK_BAL WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0;
+    } else if (strcmp(asset_tp, "BND") == 0) {
+        EXEC SQL SELECT COUNT(*) INTO :v_cnt
+            FROM TB_BND_BAL WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0;
+    } else if (strcmp(asset_tp, "FND") == 0) {
+        EXEC SQL SELECT COUNT(*) INTO :v_cnt
+            FROM TB_FND_BAL WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0;
+    }
+
+    return v_cnt;
+}

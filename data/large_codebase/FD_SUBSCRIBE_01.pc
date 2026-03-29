@@ -1,0 +1,59 @@
+/* 펀드 가입 설정 처리 - 기준가 조회, 수수료 차감, 좌수 배정, 잔고 등록 */
+#include "proframe.h"
+#include "fd_sub_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int FD_SUBSCRIBE_01(fd_sub_in_t *in, fd_sub_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_fund[13];
+    double  v_nav;
+    double  v_avail;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+    strcpy(v_fund, in->fund_cd);
+
+    /* 기준가 조회 */
+    EXEC SQL SELECT NAV INTO :v_nav
+        FROM TB_FND_NAV
+        WHERE FUND_CD = :v_fund
+        AND BASE_DT = (SELECT MAX(BASE_DT) FROM TB_FND_NAV WHERE FUND_CD = :v_fund);
+    out->nav = v_nav;
+
+    /* 가입 수수료 */
+    CM_FEE_CALC("FUND_SUB", in->invest_amt, &out->fee_amt);
+    out->net_invest = in->invest_amt - out->fee_amt;
+
+    /* 배정 좌수 */
+    out->alloc_qty = out->net_invest / v_nav * 1000;  /* 1000좌 단위 */
+
+    /* 잔액 확인 */
+    EXEC SQL SELECT AVAIL_AMT INTO :v_avail
+        FROM TB_ACCT_BAL WHERE ACCT_NO = :v_acct;
+
+    if (v_avail < in->invest_amt) {
+        strcpy(out->err_cd, "E701");
+        strcpy(out->err_msg, "투자가능금액 부족");
+        return FAIL;
+    }
+
+    /* 펀드 잔고 등록 */
+    EXEC SQL INSERT INTO TB_FND_BAL
+        (ACCT_NO, FUND_CD, HOLD_QTY, BUY_AMT, BUY_DT)
+        VALUES (:v_acct, :v_fund, :out->alloc_qty, :out->net_invest,
+                TO_CHAR(SYSDATE,'YYYYMMDD'));
+
+    /* 대금 차감 */
+    EXEC SQL UPDATE TB_ACCT_BAL
+        SET CASH_BAL = CASH_BAL - :in->invest_amt,
+            AVAIL_AMT = AVAIL_AMT - :in->invest_amt
+        WHERE ACCT_NO = :v_acct;
+
+    /* KSD 설정 통보 */
+    IF_KSD_01(NULL, NULL);
+
+    CM_LOG_01("FD_SUBSCRIBE_01", v_acct, "펀드가입");
+    return SUCCESS;
+}

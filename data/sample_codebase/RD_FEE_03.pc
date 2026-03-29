@@ -1,0 +1,27 @@
+/* 수익증권 환매 수수료 계산 (후취) */
+#include "proframe.h"
+#include "rd_fee_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RD_FEE_03(rd_fee_in_t *in, rd_fee_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    fund_cd[12];
+    double  fee_rate;
+    int     hold_days;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(fund_cd, in->fund_cd);
+    hold_days = CM_DATE_CHK(in->buy_dt, in->sell_dt);
+
+    EXEC SQL SELECT FEE_RATE INTO :fee_rate
+        FROM TB_FEE_RATE
+        WHERE FUND_CD = :fund_cd
+        AND :hold_days BETWEEN FR_DAYS AND TO_DAYS;
+
+    out->fee_amt = in->sell_amt * fee_rate;
+    CM_TAX_01(out->fee_amt, &out->tax_amt);
+    out->net_amt = in->sell_amt - out->fee_amt - out->tax_amt;
+
+    return SUCCESS;
+}

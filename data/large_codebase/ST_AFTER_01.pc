@@ -1,0 +1,38 @@
+/* 시간외 거래 처리 - 장 마감 후 종가 기준 시간외 매수 매도 주문 */
+#include "proframe.h"
+#include "st_buy_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int ST_AFTER_01(const char *acct_no, const char *stk_cd,
+                const char *side, long qty) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_stk[7];
+    double  v_close_price;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_stk, stk_cd);
+
+    /* 종가 조회 (시간외는 종가 기준) */
+    EXEC SQL SELECT PREV_CLOSE INTO :v_close_price
+        FROM TB_STK_PRICE WHERE STK_CD = :v_stk;
+
+    if (strcmp(side, "BUY") == 0) {
+        st_buy_in_t in;
+        st_buy_out_t out;
+        strcpy(in.acct_no, acct_no);
+        strcpy(in.stk_cd, stk_cd);
+        in.price = v_close_price;
+        in.qty = qty;
+        strcpy(in.ord_type, "02");  /* 시간외 */
+        return ST_BUY_01(&in, &out);
+    } else {
+        st_sell_in_t in;
+        st_sell_out_t out;
+        strcpy(in.acct_no, acct_no);
+        strcpy(in.stk_cd, stk_cd);
+        in.price = v_close_price;
+        in.qty = qty;
+        return ST_SELL_01(&in, &out);
+    }
+}

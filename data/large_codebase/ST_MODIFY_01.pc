@@ -1,0 +1,45 @@
+/* 주문 정정 처리 - 가격 수량 변경, 증거금 재계산, 원주문 취소 후 신규 등록 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int ST_MODIFY_01(long orig_ord_no, double new_price, long new_qty,
+                 const char *acct_no) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    long    v_orig;
+    char    v_acct[11];
+    char    v_stk_cd[7];
+    char    v_ord_st[3];
+    double  v_price;
+    EXEC SQL END DECLARE SECTION;
+
+    v_orig = orig_ord_no;
+    strcpy(v_acct, acct_no);
+    v_price = new_price;
+
+    /* 원주문 확인 */
+    EXEC SQL SELECT ORD_ST, STK_CD INTO :v_ord_st, :v_stk_cd
+        FROM TB_ORD_MST
+        WHERE ORD_NO = :v_orig AND ACCT_NO = :v_acct;
+
+    if (strcmp(v_ord_st, "01") != 0) {
+        return FAIL;
+    }
+
+    /* 증거금 재계산 */
+    double margin;
+    ST_MARGIN_01(v_stk_cd, new_price * new_qty, &margin);
+
+    /* 원주문 취소 + 신규 등록 */
+    EXEC SQL UPDATE TB_ORD_MST SET ORD_ST = '08' WHERE ORD_NO = :v_orig;
+
+    EXEC SQL INSERT INTO TB_ORD_MST
+        (ORD_NO, ACCT_NO, STK_CD, ORD_TP, PRICE, QTY, ORD_DT, ORD_ST, ORIG_ORD_NO)
+        VALUES (SQ_ORD_NO.NEXTVAL, :v_acct, :v_stk_cd,
+                'LIMIT', :v_price, :new_qty,
+                TO_CHAR(SYSDATE,'YYYYMMDD'), '01', :v_orig);
+
+    IF_KRX_01(NULL, NULL);
+    CM_LOG_01("ST_MODIFY_01", v_acct, "주문정정");
+    return SUCCESS;
+}

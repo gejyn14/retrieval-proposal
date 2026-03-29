@@ -1,0 +1,41 @@
+/* 대출 이자 징수 배치 처리 - 대출 잔액 기준 일할 이자 계산 및 이자 출금 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int LN_INTEREST_01(const char *base_dt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_dt[9];
+    long    v_loan_no;
+    char    v_acct[11];
+    double  v_loan_bal;
+    double  v_int_rate;
+    double  v_daily_int;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_dt, base_dt);
+
+    EXEC SQL DECLARE c_loan CURSOR FOR
+        SELECT LOAN_NO, ACCT_NO, LOAN_BAL, INT_RATE
+        FROM TB_LOAN_MST
+        WHERE LOAN_ST = '01' AND LOAN_BAL > 0;
+
+    EXEC SQL OPEN c_loan;
+
+    while (1) {
+        EXEC SQL FETCH c_loan
+            INTO :v_loan_no, :v_acct, :v_loan_bal, :v_int_rate;
+        if (SQLCA.sqlcode != 0) break;
+
+        /* 일할 이자 = 잔액 × 이율 / 365 */
+        /* 영업일만 계산 */
+        int biz_day = CM_DATE_CHK(v_dt, v_dt);
+        v_daily_int = v_loan_bal * v_int_rate / 365.0;
+
+        /* 이자 출금 */
+        CM_TRANSFER_01(v_acct, "LOAN_INT_ACCT", v_daily_int);
+    }
+
+    EXEC SQL CLOSE c_loan;
+    return SUCCESS;
+}

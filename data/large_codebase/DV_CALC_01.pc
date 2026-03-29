@@ -1,0 +1,30 @@
+/* 배당금 산정 처리 - 배당락일 기준 보유자별 배당금 총액 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int DV_CALC_01(const char *stk_cd, const char *record_dt,
+               double *total_div) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_stk[7];
+    char    v_dt[9];
+    double  v_div_amt;
+    double  v_total_qty;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_stk, stk_cd);
+    strcpy(v_dt, record_dt);
+
+    EXEC SQL SELECT DIV_AMT INTO :v_div_amt
+        FROM TB_DIV_MST
+        WHERE STK_CD = :v_stk AND RECORD_DT = :v_dt;
+
+    /* 전체 보유자 수량 합계 */
+    EXEC SQL SELECT NVL(SUM(HOLD_QTY),0) INTO :v_total_qty
+        FROM TB_STK_BAL WHERE STK_CD = :v_stk AND HOLD_QTY > 0;
+
+    int hold_days = CM_DATE_CHK(v_dt, v_dt);  /* 기준일 영업일 확인 */
+
+    *total_div = v_total_qty * v_div_amt;
+    return SUCCESS;
+}

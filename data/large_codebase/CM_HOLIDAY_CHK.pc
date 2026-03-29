@@ -1,0 +1,23 @@
+/* 휴장일 체크 조회 - 영업일 여부 판단, 시장 유형별 휴장일 확인 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_HOLIDAY_CHK(const char *base_dt, const char *mkt_tp) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_dt[9];
+    char    v_mkt[5];
+    int     v_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_dt, base_dt);
+    strcpy(v_mkt, mkt_tp);
+
+    EXEC SQL SELECT COUNT(*) INTO :v_cnt
+        FROM TB_HOLIDAY
+        WHERE BASE_DT = :v_dt
+        AND MKT_TP = :v_mkt
+        AND USE_YN = 'Y';
+
+    return (v_cnt > 0) ? 1 : 0;  /* 1=휴장일, 0=영업일 */
+}

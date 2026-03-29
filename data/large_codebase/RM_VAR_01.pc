@@ -1,0 +1,47 @@
+/* VaR 리스크 계산 처리 - 포트폴리오 위험가치 산출, 역사적 변동성 기반 신뢰구간별 최대손실액 */
+#include "proframe.h"
+#include "rm_var_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RM_VAR_01(rm_var_in_t *in, rm_var_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    double  v_portfolio_val;
+    double  v_volatility;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+
+    /* 포트폴리오 가치 */
+    JG_POS_01(v_acct, "STK", NULL);
+
+    EXEC SQL SELECT NVL(SUM(EVAL_AMT),0) INTO :v_portfolio_val
+        FROM TB_STK_BAL WHERE ACCT_NO = :v_acct;
+    out->portfolio_val = v_portfolio_val;
+
+    /* 역사적 변동성 (20일 기준) */
+    EXEC SQL SELECT NVL(STDDEV(CHG_RATE),0.02) INTO :v_volatility
+        FROM (
+            SELECT CHG_RATE FROM TB_STK_PRICE_HIST
+            WHERE STK_CD IN (SELECT STK_CD FROM TB_STK_BAL WHERE ACCT_NO = :v_acct)
+            ORDER BY BASE_DT DESC
+            FETCH FIRST 20 ROWS ONLY
+        );
+
+    /* VaR = Portfolio × Volatility × Z-score × sqrt(holding period) */
+    double z_score;
+    if (in->conf_level == 99)      z_score = 2.326;
+    else if (in->conf_level == 95) z_score = 1.645;
+    else                           z_score = 1.282;
+
+    out->var_amt = v_portfolio_val * v_volatility * z_score *
+                   sqrt((double)in->hold_period);
+    out->var_rate = (v_portfolio_val > 0) ?
+        (out->var_amt / v_portfolio_val * 100) : 0;
+
+    /* CVaR (Expected Shortfall) ≈ VaR × 1.25 */
+    out->cvar_amt = out->var_amt * 1.25;
+
+    return SUCCESS;
+}

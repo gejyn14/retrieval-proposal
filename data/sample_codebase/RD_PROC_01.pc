@@ -1,0 +1,35 @@
+/* 환매 처리 메인 프로세스 */
+#include "proframe.h"
+#include "rd_proc_str.h"
+
+int RD_PROC_01(rd_proc_in_t *in, rd_proc_out_t *out) {
+    rd_fee_in_t fee_in;
+    rd_fee_out_t fee_out;
+
+    /* 잔고 확인 */
+    EXEC SQL SELECT QTY INTO :avail_qty
+        FROM TB_FUND_BAL
+        WHERE ACCT_NO = :in->acct_no
+        AND FUND_CD = :in->fund_cd;
+
+    if (avail_qty < in->sell_qty) {
+        strcpy(out->err_cd, "E001");
+        strcpy(out->err_msg, "환매가능좌수 부족");
+        return FAIL;
+    }
+
+    /* 수수료 계산 호출 */
+    RD_FEE_03(&fee_in, &fee_out);
+
+    /* 원장 반영 */
+    EXEC SQL UPDATE TB_FUND_BAL
+        SET QTY = QTY - :in->sell_qty,
+            UPD_DT = SYSDATE
+        WHERE ACCT_NO = :in->acct_no
+        AND FUND_CD = :in->fund_cd;
+
+    /* 이체 처리 */
+    CM_TRANSFER_01(in->acct_no, fee_out.net_amt);
+
+    return SUCCESS;
+}

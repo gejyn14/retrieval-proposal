@@ -1,0 +1,19 @@
+/* 공통 입금/이체 처리 */
+#include "proframe.h"
+
+int CM_TRANSFER_01(char *acct_no, double amt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char acct[11];
+    double amount;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(acct, acct_no);
+    amount = amt;
+
+    EXEC SQL UPDATE TB_ACCT_BAL
+        SET AVAIL_AMT = AVAIL_AMT + :amount,
+            UPD_DT = SYSDATE
+        WHERE ACCT_NO = :acct;
+
+    return SUCCESS;
+}

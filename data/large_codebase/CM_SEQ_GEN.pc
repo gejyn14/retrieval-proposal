@@ -1,0 +1,19 @@
+/* 시퀀스 채번 공통 처리 - 거래번호 일련번호 자동 생성 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_SEQ_GEN(const char *seq_name, long *seq_val) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    long    v_seq;
+    char    v_sql[100];
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL SELECT SQ_COMMON.NEXTVAL INTO :v_seq FROM DUAL;
+
+    if (SQLCA.sqlcode != 0) {
+        return FAIL;
+    }
+    *seq_val = v_seq;
+    return SUCCESS;
+}

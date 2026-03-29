@@ -1,0 +1,30 @@
+/* 배당금 지급 처리 */
+#include "proframe.h"
+#include "dv_pay_str.h"
+
+int DV_PAY_01(dv_pay_in_t *in, dv_pay_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    double div_per_share;
+    long   hold_qty;
+    char   stk_cd[7];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(stk_cd, in->stk_cd);
+
+    EXEC SQL SELECT DIV_AMT INTO :div_per_share
+        FROM TB_DIV_MST
+        WHERE STK_CD = :stk_cd AND DIV_DT = :in->div_dt;
+
+    EXEC SQL SELECT QTY INTO :hold_qty
+        FROM TB_STK_BAL
+        WHERE ACCT_NO = :in->acct_no AND STK_CD = :stk_cd;
+
+    out->gross_amt = hold_qty * div_per_share;
+    CM_TAX_01(out->gross_amt, &out->tax_amt);
+    out->net_amt = out->gross_amt - out->tax_amt;
+
+    /* 입금 처리 */
+    CM_TRANSFER_01(in->acct_no, out->net_amt);
+
+    return SUCCESS;
+}

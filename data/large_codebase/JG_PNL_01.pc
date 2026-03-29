@@ -1,0 +1,32 @@
+/* 손익 계산 처리 - 매입금액 대비 평가금액 손익 금액 및 수익률 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int JG_PNL_01(const char *acct_no, double *pnl_amt, double *pnl_rate) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    double  v_buy_total;
+    double  v_eval_total;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+
+    /* 주식 매입/평가 */
+    EXEC SQL SELECT NVL(SUM(BUY_AMT),0), NVL(SUM(EVAL_AMT),0)
+        INTO :v_buy_total, :v_eval_total
+        FROM TB_STK_BAL WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0;
+
+    /* 시세 갱신 (최신가 반영) */
+    /* 각 종목별 현재가 조회 */
+    double cur_price, prev_close;
+    ST_PRICE_01("", &cur_price, &prev_close);
+
+    /* 채권 시가평가 */
+    BN_VALUATION_01("", "", NULL);
+
+    *pnl_amt = v_eval_total - v_buy_total;
+    *pnl_rate = (v_buy_total > 0) ? (*pnl_amt / v_buy_total * 100) : 0;
+
+    return SUCCESS;
+}

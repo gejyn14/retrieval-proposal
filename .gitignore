@@ -1,0 +1,21 @@
+# DB / Index
+data/chroma_db/
+data/chroma_db_large/
+data/structural.db
+data/structural.db-shm
+data/structural.db-wal
+data/structural_large.db
+data/structural_large.db-shm
+data/structural_large.db-wal
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# SVN test
+/tmp/
+
+# OS
+.DS_Store

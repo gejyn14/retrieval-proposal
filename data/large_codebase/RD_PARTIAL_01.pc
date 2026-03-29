@@ -1,0 +1,41 @@
+/* 부분 환매 처리 - 보유좌수 일부 비율 환매, 잔고 조회 후 환매 처리 위임 */
+#include "proframe.h"
+#include "rd_proc_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RD_PARTIAL_01(const char *acct_no, const char *fund_cd,
+                  double partial_rate) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_fund[13];
+    double  v_hold_qty;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+    strcpy(v_fund, fund_cd);
+
+    /* 보유좌수 확인 */
+    EXEC SQL SELECT HOLD_QTY INTO :v_hold_qty
+        FROM TB_FND_BAL
+        WHERE ACCT_NO = :v_acct AND FUND_CD = :v_fund;
+
+    long partial_qty = (long)(v_hold_qty * partial_rate);
+
+    /* 잔고 조회 */
+    jg_bal_in_t bal_in;
+    jg_bal_out_t bal_out;
+    strcpy(bal_in.acct_no, v_acct);
+    JG_BAL_02(&bal_in, &bal_out);
+
+    /* 환매 처리 위임 */
+    rd_proc_in_t proc_in;
+    rd_proc_out_t proc_out;
+    strcpy(proc_in.acct_no, v_acct);
+    strcpy(proc_in.fund_cd, v_fund);
+    proc_in.sell_qty = partial_qty;
+    RD_PROC_01(&proc_in, &proc_out);
+
+    CM_LOG_01("RD_PARTIAL_01", v_acct, "부분환매");
+    return SUCCESS;
+}

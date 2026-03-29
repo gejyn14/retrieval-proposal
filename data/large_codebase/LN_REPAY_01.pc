@@ -1,0 +1,55 @@
+/* 대출 상환 처리 - 전액 일부 이자만 상환, 미납이자 계산, 잔액 갱신, 상환금 출금 */
+#include "proframe.h"
+#include "ln_repay_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int LN_REPAY_01(ln_repay_in_t *in, ln_repay_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    long    v_loan_no;
+    char    v_acct[11];
+    double  v_loan_bal;
+    double  v_int_rate;
+    char    v_loan_dt[9];
+    EXEC SQL END DECLARE SECTION;
+
+    v_loan_no = in->loan_no;
+    strcpy(v_acct, in->acct_no);
+
+    EXEC SQL SELECT LOAN_BAL, INT_RATE, LOAN_DT
+        INTO :v_loan_bal, :v_int_rate, :v_loan_dt
+        FROM TB_LOAN_MST
+        WHERE LOAN_NO = :v_loan_no AND ACCT_NO = :v_acct;
+
+    /* 미납 이자 계산 */
+    char today[9];
+    EXEC SQL SELECT TO_CHAR(SYSDATE,'YYYYMMDD') INTO :today FROM DUAL;
+    int days = CM_DATE_CHK(v_loan_dt, today);
+    out->interest = v_loan_bal * v_int_rate * days / 365.0;
+
+    if (strcmp(in->repay_tp, "01") == 0) {
+        /* 전액 상환 */
+        out->principal = v_loan_bal;
+    } else if (strcmp(in->repay_tp, "03") == 0) {
+        /* 이자만 */
+        out->principal = 0;
+    } else {
+        /* 일부 상환 */
+        out->principal = in->repay_amt;
+    }
+
+    out->total_repay = out->principal + out->interest;
+    out->remain_bal = v_loan_bal - out->principal;
+
+    /* 상환금 출금 */
+    CM_TRANSFER_01(v_acct, "LOAN_REPAY_ACCT", out->total_repay);
+
+    /* 대출 원장 갱신 */
+    EXEC SQL UPDATE TB_LOAN_MST
+        SET LOAN_BAL = :out->remain_bal,
+            LOAN_ST = CASE WHEN :out->remain_bal = 0 THEN '09' ELSE LOAN_ST END
+        WHERE LOAN_NO = :v_loan_no;
+
+    CM_LOG_01("LN_REPAY_01", v_acct, "대출상환");
+    return SUCCESS;
+}

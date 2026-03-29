@@ -1,0 +1,14 @@
+/* 공통 일수 계산 */
+#include "proframe.h"
+
+int CM_DATE_CHK(char *from_dt, char *to_dt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    int diff_days;
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL SELECT TO_DATE(:to_dt,'YYYYMMDD')
+                  - TO_DATE(:from_dt,'YYYYMMDD')
+        INTO :diff_days FROM DUAL;
+
+    return diff_days;
+}

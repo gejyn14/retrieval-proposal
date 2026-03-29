@@ -1,0 +1,26 @@
+/* 배당 보고서 생성 처리 - 연간 배당금 지급 현황 및 세금 집계 리포트 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int DV_REPORT_01(const char *base_year, void *report) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_year[5];
+    double  v_total_div;
+    int     v_div_cnt;
+    double  v_total_tax;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_year, base_year);
+
+    EXEC SQL SELECT COUNT(*), NVL(SUM(DIV_AMT),0)
+        INTO :v_div_cnt, :v_total_div
+        FROM TB_DIV_MST
+        WHERE DIV_DT LIKE :v_year || '%';
+
+    EXEC SQL SELECT NVL(SUM(TX_AMT),0) INTO :v_total_tax
+        FROM TB_TX_HIST
+        WHERE TX_TP = 'DIV_PAY' AND TX_DT LIKE :v_year || '%';
+
+    return SUCCESS;
+}

@@ -1,0 +1,20 @@
+/* 예탁원 KSD SAFE+ 인터페이스 처리 - 설정 환매 결제 전문 전송 및 상태 갱신 */
+#include "proframe.h"
+#include "if_ksd_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int IF_KSD_01(if_ksd_in_t *in, if_ksd_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_msg[512];
+    EXEC SQL END DECLARE SECTION;
+
+    /* KSD SAFE+ 전문 전송 */
+    EXEC SQL UPDATE TB_KSD_IF
+        SET SEND_ST = '01'
+        WHERE SEND_ST = '00'
+        AND IF_DT = TO_CHAR(SYSDATE,'YYYYMMDD');
+
+    CM_LOG_01("IF_KSD_01", "", "KSD전문전송");
+    return SUCCESS;
+}

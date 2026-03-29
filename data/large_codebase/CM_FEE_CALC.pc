@@ -1,0 +1,30 @@
+/* 공통 수수료 계산 처리 - 수수료 유형별 수수료율 조회 및 수수료 금액 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_FEE_CALC(const char *fee_type, double base_amt, double *fee_amt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_type[11];
+    double  v_rate;
+    double  v_min_fee;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_type, fee_type);
+
+    EXEC SQL SELECT FEE_RATE, MIN_FEE INTO :v_rate, :v_min_fee
+        FROM TB_FEE_MST
+        WHERE FEE_TYPE = :v_type AND USE_YN = 'Y';
+
+    if (SQLCA.sqlcode != 0) {
+        *fee_amt = 0;
+        return FAIL;
+    }
+
+    *fee_amt = base_amt * v_rate;
+    if (*fee_amt < v_min_fee) {
+        *fee_amt = v_min_fee;
+    }
+
+    return SUCCESS;
+}

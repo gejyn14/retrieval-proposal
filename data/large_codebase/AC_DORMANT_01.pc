@@ -1,0 +1,34 @@
+/* 휴면계좌 전환 배치 처리 - 1년 이상 미거래 계좌 휴면 전환 및 고객 알림 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int AC_DORMANT_01(const char *base_dt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_dt[9];
+    char    v_cutoff[9];
+    int     v_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_dt, base_dt);
+
+    /* 1년 이상 거래 없는 계좌 추출 */
+    EXEC SQL SELECT TO_CHAR(ADD_MONTHS(TO_DATE(:v_dt,'YYYYMMDD'),-12),'YYYYMMDD')
+        INTO :v_cutoff FROM DUAL;
+
+    EXEC SQL UPDATE TB_ACCT_MST
+        SET DORMANT_YN = 'Y', UPD_DT = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+        WHERE CLOSE_YN = 'N' AND DORMANT_YN = 'N'
+        AND ACCT_NO NOT IN (
+            SELECT DISTINCT ACCT_NO FROM TB_TX_HIST
+            WHERE TX_DT >= :v_cutoff
+        );
+
+    v_cnt = SQLCA.sqlerrd[2];
+
+    /* 대상 고객 알림 */
+    CM_NOTIFY_01("BATCH", "DORMANT", "휴면계좌 전환 안내");
+
+    CM_LOG_01("AC_DORMANT_01", "BATCH", "휴면전환");
+    return v_cnt;
+}

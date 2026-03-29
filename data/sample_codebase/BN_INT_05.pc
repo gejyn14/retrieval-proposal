@@ -1,0 +1,24 @@
+/* 채권 이자 계산 (경과이자) */
+#include "proframe.h"
+#include "bn_int_str.h"
+
+int BN_INT_05(bn_int_in_t *in, bn_int_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    double coupon_rate;
+    int    accrual_days;
+    char   bond_cd[12];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(bond_cd, in->bond_cd);
+    accrual_days = CM_DATE_CHK(in->lst_pay_dt, in->calc_dt);
+
+    EXEC SQL SELECT COUPON_RATE INTO :coupon_rate
+        FROM TB_BOND_MST
+        WHERE BOND_CD = :bond_cd;
+
+    out->int_amt = in->face_amt * coupon_rate * accrual_days / 365;
+    CM_TAX_01(out->int_amt, &out->tax_amt);
+    out->net_int = out->int_amt - out->tax_amt;
+
+    return SUCCESS;
+}

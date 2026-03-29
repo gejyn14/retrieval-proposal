@@ -1,0 +1,34 @@
+/* 신용리스크 평가 처리 - 대출잔액 대비 담보가치 비율 산출, 신용 위험도 평가 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RM_CREDIT_01(const char *acct_no, double *credit_score) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    double  v_loan_bal;
+    double  v_coll_val;
+    int     v_overdue_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+
+    /* 대출 잔액 */
+    EXEC SQL SELECT NVL(SUM(LOAN_BAL),0) INTO :v_loan_bal
+        FROM TB_LOAN_MST
+        WHERE ACCT_NO = :v_acct AND LOAN_ST IN ('01','02');
+
+    /* 담보 가치 */
+    JG_POS_01(v_acct, "STK", NULL);
+    EXEC SQL SELECT NVL(SUM(EVAL_AMT),0) INTO :v_coll_val
+        FROM TB_STK_BAL WHERE ACCT_NO = :v_acct;
+
+    /* 담보비율 = 담보가치 / 대출잔액 */
+    if (v_loan_bal > 0) {
+        *credit_score = v_coll_val / v_loan_bal * 100;
+    } else {
+        *credit_score = 999;  /* 대출 없음 */
+    }
+
+    return SUCCESS;
+}

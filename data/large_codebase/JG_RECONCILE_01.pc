@@ -1,0 +1,29 @@
+/* 잔고 대사 처리 - KSD 예탁원 수탁잔고와 사내 잔고 비교 검증, 불일치 알림 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int JG_RECONCILE_01(const char *base_dt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_dt[9];
+    int     v_diff_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_dt, base_dt);
+
+    /* KSD 수탁 잔고 vs 사내 잔고 비교 */
+    EXEC SQL SELECT COUNT(*) INTO :v_diff_cnt
+        FROM TB_KSD_IF k, TB_STK_BAL s
+        WHERE k.ACCT_NO = s.ACCT_NO
+        AND k.IF_DT = :v_dt
+        AND k.QTY != s.HOLD_QTY;
+
+    if (v_diff_cnt > 0) {
+        /* 불일치 건 알림 */
+        IF_KSD_01(NULL, NULL);
+        CM_LOG_01("JG_RECONCILE_01", "BATCH", "잔고불일치발견");
+    }
+
+    CM_LOG_01("JG_RECONCILE_01", "BATCH", "잔고대사완료");
+    return v_diff_cnt;
+}

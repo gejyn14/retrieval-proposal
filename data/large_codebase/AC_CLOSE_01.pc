@@ -1,0 +1,48 @@
+/* 계좌 해지 처리 - 보유종목 확인, 잔여 현금 환불, 계좌 상태 폐쇄 변경 */
+#include "proframe.h"
+#include "ac_close_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int AC_CLOSE_01(ac_close_in_t *in, ac_close_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    double  v_cash;
+    int     v_stk_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+
+    /* 권한 검증 */
+    if (CM_AUTH_01(v_acct, in->auth_key, 3) != SUCCESS) {
+        strcpy(out->err_cd, "E401");
+        strcpy(out->err_msg, "권한 검증 실패");
+        return FAIL;
+    }
+
+    /* 보유 종목 확인 — 잔고 있으면 해지 불가 */
+    EXEC SQL SELECT COUNT(*) INTO :v_stk_cnt
+        FROM TB_STK_BAL
+        WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0;
+
+    if (v_stk_cnt > 0) {
+        strcpy(out->err_cd, "E202");
+        strcpy(out->err_msg, "보유종목 존재하여 해지 불가");
+        return FAIL;
+    }
+
+    /* 잔여 현금 환불 */
+    EXEC SQL SELECT CASH_BAL INTO :v_cash
+        FROM TB_ACCT_BAL WHERE ACCT_NO = :v_acct;
+    out->refund_amt = v_cash;
+
+    /* 계좌 상태 변경 */
+    EXEC SQL UPDATE TB_ACCT_MST
+        SET CLOSE_YN = 'Y', CLOSE_DT = TO_CHAR(SYSDATE,'YYYYMMDD'),
+            ACCT_ST = '09'
+        WHERE ACCT_NO = :v_acct;
+
+    CM_LOG_01("AC_CLOSE_01", v_acct, "계좌해지");
+
+    return SUCCESS;
+}

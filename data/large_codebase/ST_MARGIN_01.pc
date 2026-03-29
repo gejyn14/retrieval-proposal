@@ -1,0 +1,24 @@
+/* 증거금 계산 처리 - 종목별 증거금율 조회 및 위탁 증거금 금액 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int ST_MARGIN_01(const char *stk_cd, double order_amt, double *margin_amt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_stk[7];
+    double  v_margin_rate;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_stk, stk_cd);
+
+    EXEC SQL SELECT MARGIN_RATE INTO :v_margin_rate
+        FROM TB_MARGIN_MST
+        WHERE STK_CD = :v_stk AND USE_YN = 'Y';
+
+    if (SQLCA.sqlcode != 0) {
+        v_margin_rate = 100.0;  /* 기본 100% */
+    }
+
+    *margin_amt = order_amt * (v_margin_rate / 100.0);
+    return SUCCESS;
+}

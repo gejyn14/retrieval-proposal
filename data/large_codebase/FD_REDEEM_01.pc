@@ -1,0 +1,69 @@
+/* 펀드 환매 처리 - 보유좌수 확인, 기준가 적용, 환매수수료 계산, 과세, KSD 통보 */
+#include "proframe.h"
+#include "fd_redeem_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int FD_REDEEM_01(fd_redeem_in_t *in, fd_redeem_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_fund[13];
+    double  v_hold_qty;
+    double  v_buy_amt;
+    char    v_buy_dt[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+    strcpy(v_fund, in->fund_cd);
+
+    /* 보유좌수 확인 */
+    EXEC SQL SELECT HOLD_QTY, BUY_AMT, BUY_DT
+        INTO :v_hold_qty, :v_buy_amt, :v_buy_dt
+        FROM TB_FND_BAL
+        WHERE ACCT_NO = :v_acct AND FUND_CD = :v_fund;
+
+    double redeem_qty = in->redeem_qty;
+    if (strcmp(in->redeem_tp, "01") == 0) {
+        redeem_qty = v_hold_qty;  /* 전액 환매 */
+    }
+
+    if (v_hold_qty < redeem_qty) {
+        strcpy(out->err_cd, "E801");
+        strcpy(out->err_msg, "환매가능좌수 부족");
+        return FAIL;
+    }
+
+    /* 기준가 조회 */
+    FD_NAV_01(v_fund, &out->nav);
+
+    /* 환매 금액 */
+    out->gross_amt = redeem_qty * out->nav / 1000;
+
+    /* 환매 수수료 */
+    rd_fee_in_t fee_in;
+    rd_fee_out_t fee_out;
+    strcpy(fee_in.fund_cd, v_fund);
+    strcpy(fee_in.buy_dt, v_buy_dt);
+    fee_in.sell_amt = out->gross_amt;
+    RD_FEE_03(&fee_in, &fee_out);
+    out->fee_amt = fee_out.fee_amt;
+
+    /* 환매 과세 */
+    double profit = out->gross_amt - (v_buy_amt * redeem_qty / v_hold_qty);
+    if (profit > 0) {
+        CM_TAX_01(profit, &out->tax_amt);
+    }
+
+    out->net_amt = out->gross_amt - out->fee_amt - out->tax_amt;
+
+    /* 잔고 차감 */
+    EXEC SQL UPDATE TB_FND_BAL
+        SET HOLD_QTY = HOLD_QTY - :redeem_qty
+        WHERE ACCT_NO = :v_acct AND FUND_CD = :v_fund;
+
+    /* KSD 환매 통보 */
+    IF_KSD_01(NULL, NULL);
+
+    CM_LOG_01("FD_REDEEM_01", v_acct, "펀드환매");
+    return SUCCESS;
+}

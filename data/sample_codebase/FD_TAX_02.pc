@@ -1,0 +1,20 @@
+/* 분배금 과세 계산 — 계좌유형별 세율 분기 */
+#include "proframe.h"
+
+int FD_TAX_02(double amt, char *acct_type, double *tax) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    double tax_rate;
+    char   acct_tp[2];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(acct_tp, acct_type);
+
+    EXEC SQL SELECT TAX_RATE INTO :tax_rate
+        FROM TB_TAX_MST
+        WHERE TAX_TYPE = 'FUND_DIST'
+        AND ACCT_TP = :acct_tp
+        AND USE_YN = 'Y';
+
+    *tax = amt * tax_rate;
+    return SUCCESS;
+}

@@ -1,0 +1,25 @@
+/* 거래소 KRX 주문 인터페이스 처리 - FIX 프로토콜 주문 전문 조립 및 전송 */
+#include "proframe.h"
+#include "if_krx_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int IF_KRX_01(if_krx_in_t *in, if_krx_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_msg[512];
+    char    v_resp[512];
+    EXEC SQL END DECLARE SECTION;
+
+    /* 전문 조립 (FIX Protocol) */
+    /* 35=D (New Order), 54=1(Buy)/2(Sell), 55=STK_CD, 44=Price, 38=Qty */
+
+    /* 전문 전송 및 응답 수신 */
+    EXEC SQL INSERT INTO TB_TX_HIST
+        (TX_NO, TX_DT, TX_TM, SVC_NM, TX_TP, TX_DESC)
+        VALUES (SQ_TX_NO.NEXTVAL, TO_CHAR(SYSDATE,'YYYYMMDD'),
+                TO_CHAR(SYSDATE,'HH24MISS'), 'IF_KRX_01', 'KRX_SEND',
+                'KRX 주문전송');
+
+    CM_LOG_01("IF_KRX_01", "", "KRX전문전송");
+    return SUCCESS;
+}

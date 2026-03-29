@@ -1,0 +1,53 @@
+/* 수익증권 환매 처리 메인 - 보유좌수 확인, 기준가 적용, 수수료 계산 호출, 잔고 차감 */
+#include "proframe.h"
+#include "rd_proc_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RD_PROC_01(rd_proc_in_t *in, rd_proc_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_fund[13];
+    double  v_hold_qty;
+    double  v_nav;
+    char    v_buy_dt[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+    strcpy(v_fund, in->fund_cd);
+
+    /* 보유좌수 확인 */
+    EXEC SQL SELECT HOLD_QTY, BUY_DT INTO :v_hold_qty, :v_buy_dt
+        FROM TB_FND_BAL
+        WHERE ACCT_NO = :v_acct AND FUND_CD = :v_fund;
+
+    if (v_hold_qty < in->sell_qty) {
+        strcpy(out->err_cd, "E901");
+        strcpy(out->err_msg, "환매가능좌수 부족");
+        return FAIL;
+    }
+
+    /* 기준가 조회 */
+    FD_NAV_01(v_fund, &v_nav);
+    out->sell_amt = in->sell_qty * v_nav / 1000;
+
+    /* 수수료 계산 호출 */
+    rd_fee_in_t fee_in;
+    rd_fee_out_t fee_out;
+    strcpy(fee_in.fund_cd, v_fund);
+    strcpy(fee_in.buy_dt, v_buy_dt);
+    fee_in.sell_amt = out->sell_amt;
+    RD_FEE_03(&fee_in, &fee_out);
+
+    out->fee_amt = fee_out.fee_amt;
+    out->tax_amt = fee_out.tax_amt;
+    out->net_amt = fee_out.net_amt;
+
+    /* 잔고 차감 */
+    EXEC SQL UPDATE TB_FND_BAL
+        SET HOLD_QTY = HOLD_QTY - :in->sell_qty
+        WHERE ACCT_NO = :v_acct AND FUND_CD = :v_fund;
+
+    CM_LOG_01("RD_PROC_01", v_acct, "수익증권환매");
+    return SUCCESS;
+}

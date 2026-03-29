@@ -1,0 +1,16 @@
+/* 공통 세금 계산 모듈 */
+#include "proframe.h"
+
+int CM_TAX_01(double amt, double *tax) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    double tax_rate;
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL SELECT TAX_RATE INTO :tax_rate
+        FROM TB_TAX_MST
+        WHERE TAX_TYPE = 'DEFAULT'
+        AND USE_YN = 'Y';
+
+    *tax = amt * tax_rate;
+    return SUCCESS;
+}

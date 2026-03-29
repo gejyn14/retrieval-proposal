@@ -1,0 +1,40 @@
+/* 익스포저 산출 처리 - 포지션 기반 총 익스포저 계산, 한도 대비 사용률 및 리스크 레벨 판정 */
+#include "proframe.h"
+#include "rm_exposure_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RM_EXPOSURE_01(rm_exposure_in_t *in, rm_exposure_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    double  v_long_amt;
+    double  v_short_amt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+
+    /* 매수 포지션 (Long) */
+    EXEC SQL SELECT NVL(SUM(EVAL_AMT),0) INTO :v_long_amt
+        FROM TB_STK_BAL WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0;
+
+    /* 포지션 상세 */
+    JG_POS_01(v_acct, "STK", NULL);
+
+    out->gross_exposure = v_long_amt;
+    out->net_exposure = v_long_amt - v_short_amt;
+
+    /* 한도 대비 사용률 */
+    EXEC SQL SELECT LIMIT_AMT INTO :out->limit_amt
+        FROM TB_LIMIT_MST
+        WHERE LIMIT_TP = 'EXPOSURE' AND LIMIT_CD = :v_acct;
+
+    out->usage_rate = (out->limit_amt > 0) ?
+        (out->gross_exposure / out->limit_amt * 100) : 0;
+
+    /* 리스크 레벨 판정 */
+    if (out->usage_rate >= 90)       strcpy(out->risk_level, "HI");
+    else if (out->usage_rate >= 70)  strcpy(out->risk_level, "MD");
+    else                             strcpy(out->risk_level, "LO");
+
+    return SUCCESS;
+}

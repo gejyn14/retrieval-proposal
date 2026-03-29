@@ -1,0 +1,26 @@
+/* 계좌 동결 처리 - 사고 신고 법적 요청 등에 의한 계좌 거래 정지 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int AC_FREEZE_01(const char *acct_no, const char *freeze_rsn) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_rsn[101];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+    strcpy(v_rsn, freeze_rsn);
+
+    if (CM_AUTH_01(v_acct, "", 5) != SUCCESS) {
+        return FAIL;
+    }
+
+    EXEC SQL UPDATE TB_ACCT_MST
+        SET FREEZE_YN = 'Y', FREEZE_RSN = :v_rsn,
+            UPD_DT = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+        WHERE ACCT_NO = :v_acct;
+
+    CM_LOG_01("AC_FREEZE_01", v_acct, "계좌동결");
+    return SUCCESS;
+}

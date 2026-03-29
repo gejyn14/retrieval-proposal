@@ -1,0 +1,35 @@
+/* 펀드 전환 처리 - 기존 펀드 환매 후 신규 펀드 재가입, 전환 수수료 적용 */
+#include "proframe.h"
+#include "fd_redeem_str.h"
+#include "fd_sub_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int FD_SWITCH_01(const char *acct_no, const char *from_fund,
+                 const char *to_fund, double switch_qty) {
+    /* 1단계: 기존 펀드 환매 */
+    fd_redeem_in_t rd_in;
+    fd_redeem_out_t rd_out;
+    strcpy(rd_in.acct_no, acct_no);
+    strcpy(rd_in.fund_cd, from_fund);
+    rd_in.redeem_qty = switch_qty;
+    strcpy(rd_in.redeem_tp, "02");  /* 일부 환매 */
+
+    if (FD_REDEEM_01(&rd_in, &rd_out) != SUCCESS) {
+        return FAIL;
+    }
+
+    /* 2단계: 환매금으로 신규 펀드 가입 */
+    fd_sub_in_t sub_in;
+    fd_sub_out_t sub_out;
+    strcpy(sub_in.acct_no, acct_no);
+    strcpy(sub_in.fund_cd, to_fund);
+    sub_in.invest_amt = rd_out.net_amt;
+
+    if (FD_SUBSCRIBE_01(&sub_in, &sub_out) != SUCCESS) {
+        return FAIL;
+    }
+
+    CM_LOG_01("FD_SWITCH_01", acct_no, "펀드전환");
+    return SUCCESS;
+}

@@ -1,0 +1,42 @@
+/* 리스크 한도 관리 배치 처리 - 전 계좌 한도 사용률 점검, 경고 초과 시 알림 및 익스포저 재산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RM_LIMIT_01(const char *base_dt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_dt[9];
+    char    v_acct[11];
+    double  v_usage;
+    double  v_warn;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_dt, base_dt);
+
+    /* 모든 한도 항목 순회 */
+    EXEC SQL DECLARE c_limit CURSOR FOR
+        SELECT LIMIT_CD, USED_AMT / LIMIT_AMT * 100, WARN_RATE
+        FROM TB_LIMIT_MST
+        WHERE USE_YN = 'Y' AND LIMIT_AMT > 0;
+
+    EXEC SQL OPEN c_limit;
+
+    while (1) {
+        EXEC SQL FETCH c_limit INTO :v_acct, :v_usage, :v_warn;
+        if (SQLCA.sqlcode != 0) break;
+
+        if (v_usage >= v_warn) {
+            /* 경고 한도 초과 → 알림 */
+            CM_NOTIFY_01("RISK_MGR", "LIMIT_WARN", "한도경고");
+
+            /* 익스포저 재산출 */
+            rm_exposure_in_t exp_in;
+            rm_exposure_out_t exp_out;
+            strcpy(exp_in.acct_no, v_acct);
+            RM_EXPOSURE_01(&exp_in, &exp_out);
+        }
+    }
+
+    EXEC SQL CLOSE c_limit;
+    return SUCCESS;
+}

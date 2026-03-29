@@ -1,0 +1,14 @@
+[project]
+name = "proc-retrieval-poc"
+version = "0.1.0"
+description = "Pro*C code retrieval PoC — chunk vector vs structural graph comparison"
+requires-python = ">=3.11"
+dependencies = [
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+    "mcp>=1.0.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "ruff>=0.5.0"]

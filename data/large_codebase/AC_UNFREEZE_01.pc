@@ -1,0 +1,24 @@
+/* 계좌 동결 해제 처리 - 동결 사유 해소 후 거래 정지 해제 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int AC_UNFREEZE_01(const char *acct_no, const char *auth_key) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+
+    if (CM_AUTH_01(v_acct, auth_key, 5) != SUCCESS) {
+        return FAIL;
+    }
+
+    EXEC SQL UPDATE TB_ACCT_MST
+        SET FREEZE_YN = 'N', FREEZE_RSN = NULL,
+            UPD_DT = TO_CHAR(SYSDATE,'YYYYMMDDHH24MISS')
+        WHERE ACCT_NO = :v_acct;
+
+    CM_LOG_01("AC_UNFREEZE_01", v_acct, "동결해제");
+    return SUCCESS;
+}

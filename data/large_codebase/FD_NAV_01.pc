@@ -1,0 +1,29 @@
+/* 펀드 기준가 조회 산출 처리 - 최신 기준가 NAV 조회, 총자산 총좌수 기반 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int FD_NAV_01(const char *fund_cd, double *nav) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_fund[13];
+    double  v_nav;
+    double  v_tot_asset;
+    double  v_tot_units;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_fund, fund_cd);
+
+    /* 최신 기준가 조회 */
+    EXEC SQL SELECT NAV, TOT_ASSET, TOT_UNITS INTO :v_nav, :v_tot_asset, :v_tot_units
+        FROM TB_FND_NAV
+        WHERE FUND_CD = :v_fund
+        AND BASE_DT = (SELECT MAX(BASE_DT) FROM TB_FND_NAV WHERE FUND_CD = :v_fund);
+
+    if (SQLCA.sqlcode != 0) {
+        *nav = 1000.0;  /* 기본 기준가 */
+        return FAIL;
+    }
+
+    *nav = v_nav;
+    return SUCCESS;
+}

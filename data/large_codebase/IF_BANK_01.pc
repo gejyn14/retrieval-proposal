@@ -1,0 +1,27 @@
+/* 은행 인터페이스 처리 - 실시간 계좌 이체 전문 생성, 계좌번호 암호화 전송 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int IF_BANK_01(const char *from_bank, const char *to_bank,
+               const char *acct_no, double amt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_enc_acct[65];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+
+    /* 계좌번호 암호화 */
+    CM_CRYPTO_01(v_acct, v_enc_acct, "ENC");
+
+    /* 은행 연동 전문 생성 */
+    EXEC SQL INSERT INTO TB_TX_HIST
+        (TX_NO, TX_DT, TX_TM, SVC_NM, ACCT_NO, TX_TP, TX_AMT, TX_DESC)
+        VALUES (SQ_TX_NO.NEXTVAL, TO_CHAR(SYSDATE,'YYYYMMDD'),
+                TO_CHAR(SYSDATE,'HH24MISS'), 'IF_BANK_01',
+                :v_acct, 'BANK_XFER', :amt, '은행이체');
+
+    CM_LOG_01("IF_BANK_01", v_acct, "은행이체");
+    return SUCCESS;
+}

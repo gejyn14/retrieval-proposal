@@ -1,0 +1,27 @@
+/* 배당소득 원천징수 세금 계산 처리 - 비과세 계좌 면제, 일반 계좌 원천징수 세액 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int DV_WITHHOLD_01(const char *acct_no, double gross_div,
+                   double *withhold_tax) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_acct_tp[3];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+
+    /* 계좌 유형 조회 (비과세 여부) */
+    EXEC SQL SELECT ACCT_TP INTO :v_acct_tp
+        FROM TB_ACCT_MST WHERE ACCT_NO = :v_acct;
+
+    if (strcmp(v_acct_tp, "03") == 0) {
+        *withhold_tax = 0;  /* 비과세 계좌 */
+        return SUCCESS;
+    }
+
+    /* 일반 원천징수 */
+    CM_TAX_01(gross_div, withhold_tax);
+    return SUCCESS;
+}

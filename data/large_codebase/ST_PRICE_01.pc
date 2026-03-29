@@ -1,0 +1,28 @@
+/* 시세 조회 처리 - 종목별 현재가 전일종가 시세 정보 조회 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int ST_PRICE_01(const char *stk_cd, double *cur_price, double *prev_close) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_stk[7];
+    double  v_cur;
+    double  v_prev;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_stk, stk_cd);
+
+    EXEC SQL SELECT CUR_PRICE, PREV_CLOSE INTO :v_cur, :v_prev
+        FROM TB_STK_PRICE
+        WHERE STK_CD = :v_stk;
+
+    if (SQLCA.sqlcode != 0) {
+        *cur_price = 0;
+        *prev_close = 0;
+        return FAIL;
+    }
+
+    *cur_price = v_cur;
+    *prev_close = v_prev;
+    return SUCCESS;
+}

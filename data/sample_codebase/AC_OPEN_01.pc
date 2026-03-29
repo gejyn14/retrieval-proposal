@@ -1,0 +1,39 @@
+/* 계좌 개설 처리 */
+#include "proframe.h"
+#include "ac_open_str.h"
+
+int AC_OPEN_01(ac_open_in_t *in, ac_open_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char new_acct[11];
+    char ci_no[64];
+    int  acct_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(ci_no, in->ci_no);
+
+    /* 동일 CI 기존 계좌 수 확인 */
+    EXEC SQL SELECT COUNT(*) INTO :acct_cnt
+        FROM TB_ACCT_MST
+        WHERE CI_NO = :ci_no AND CLOSE_YN = 'N';
+
+    if (acct_cnt >= 5) {
+        strcpy(out->err_cd, "E201");
+        strcpy(out->err_msg, "최대 계좌 수 초과");
+        return FAIL;
+    }
+
+    /* 계좌번호 채번 */
+    CM_ACCT_GEN(in->brnch_cd, new_acct);
+
+    /* 계좌 마스터 등록 */
+    EXEC SQL INSERT INTO TB_ACCT_MST
+        (ACCT_NO, CUST_NO, CI_NO, ACCT_TP, OPEN_DT, CLOSE_YN)
+        VALUES (:new_acct, :in->cust_no, :ci_no,
+                :in->acct_type, TO_CHAR(SYSDATE,'YYYYMMDD'), 'N');
+
+    /* 고객 정보 검증 */
+    AC_KYC_CHK(in->cust_no, &out->kyc_result);
+
+    strcpy(out->acct_no, new_acct);
+    return SUCCESS;
+}

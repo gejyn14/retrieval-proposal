@@ -1,0 +1,30 @@
+/* 경과이자 계산 처리 - 직전 이표일부터 현재까지 경과일수 기반 경과이자 산출 */
+#include "proframe.h"
+#include "bn_coupon_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int BN_ACCRUED_01(bn_coupon_in_t *in, bn_coupon_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_bnd[13];
+    double  v_coupon_rate;
+    int     v_freq;
+    char    v_last_coupon_dt[9];
+    char    v_today[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_bnd, in->bnd_cd);
+
+    EXEC SQL SELECT COUPON_RATE, COUPON_FREQ INTO :v_coupon_rate, :v_freq
+        FROM TB_BND_ISSUE WHERE BND_CD = :v_bnd;
+
+    EXEC SQL SELECT TO_CHAR(SYSDATE,'YYYYMMDD') INTO :v_today FROM DUAL;
+
+    /* 직전 이표일로부터 경과일 계산 */
+    out->accrued_days = CM_DATE_CHK(v_last_coupon_dt, v_today);
+
+    /* 경과이자 = 액면 × 쿠폰율 × (경과일 / 365) */
+    out->accrued_int = in->face_amt * v_coupon_rate * out->accrued_days / 365.0;
+
+    return SUCCESS;
+}

@@ -1,0 +1,27 @@
+/* 사용자 권한 검증 처리 - 계좌 상태 및 동결 여부 확인, 인증 레벨 체크 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_AUTH_01(const char *acct_no, const char *auth_key, int auth_level) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_auth[33];
+    int     v_level;
+    int     v_result;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+    strcpy(v_auth, auth_key);
+    v_level = auth_level;
+
+    EXEC SQL SELECT CASE WHEN ACCT_ST = '01' AND FREEZE_YN = 'N' THEN 1 ELSE 0 END
+        INTO :v_result
+        FROM TB_ACCT_MST
+        WHERE ACCT_NO = :v_acct;
+
+    if (SQLCA.sqlcode != 0 || v_result == 0) {
+        return FAIL;
+    }
+    return SUCCESS;
+}

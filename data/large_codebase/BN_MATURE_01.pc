@@ -1,0 +1,46 @@
+/* 채권 만기 상환 처리 - 액면 상환금 및 마지막 이표 지급, 세금 계산, 잔고 삭제 */
+#include "proframe.h"
+#include "bn_mature_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int BN_MATURE_01(bn_mature_in_t *in, bn_mature_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_bnd[13];
+    double  v_hold_qty;
+    double  v_coupon_rate;
+    int     v_freq;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+    strcpy(v_bnd, in->bnd_cd);
+
+    EXEC SQL SELECT HOLD_QTY INTO :v_hold_qty
+        FROM TB_BND_BAL
+        WHERE ACCT_NO = :v_acct AND BND_CD = :v_bnd;
+
+    EXEC SQL SELECT COUPON_RATE, COUPON_FREQ INTO :v_coupon_rate, :v_freq
+        FROM TB_BND_ISSUE WHERE BND_CD = :v_bnd;
+
+    /* 액면 상환금 */
+    out->face_amt = v_hold_qty;
+
+    /* 마지막 이표 */
+    out->last_coupon = v_hold_qty * (v_coupon_rate / v_freq);
+
+    /* 세금 */
+    CM_TAX_01(out->last_coupon, &out->tax_amt);
+
+    out->net_amt = out->face_amt + out->last_coupon - out->tax_amt;
+
+    /* 잔고 삭제 */
+    EXEC SQL DELETE FROM TB_BND_BAL
+        WHERE ACCT_NO = :v_acct AND BND_CD = :v_bnd;
+
+    /* 상환금 입금 */
+    CM_TRANSFER_01("BOND_MATURE_ACCT", v_acct, out->net_amt);
+
+    CM_LOG_01("BN_MATURE_01", v_acct, "만기상환");
+    return SUCCESS;
+}

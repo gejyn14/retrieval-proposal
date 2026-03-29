@@ -1,0 +1,44 @@
+/* 주문 취소 처리 - 미체결 주문 취소, 매도가능수량 복원, 거래소 취소 전송 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int ST_CANCEL_01(long ord_no, const char *acct_no) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    long    v_ord_no;
+    char    v_acct[11];
+    char    v_ord_st[3];
+    char    v_side[5];
+    long    v_qty;
+    long    v_exec_qty;
+    EXEC SQL END DECLARE SECTION;
+
+    v_ord_no = ord_no;
+    strcpy(v_acct, acct_no);
+
+    /* 주문 상태 확인 */
+    EXEC SQL SELECT ORD_ST, ORD_SIDE, QTY, EXEC_QTY
+        INTO :v_ord_st, :v_side, :v_qty, :v_exec_qty
+        FROM TB_ORD_MST
+        WHERE ORD_NO = :v_ord_no AND ACCT_NO = :v_acct;
+
+    if (strcmp(v_ord_st, "01") != 0) {
+        return FAIL;  /* 접수 상태가 아님 */
+    }
+
+    /* 미체결 수량만 취소 */
+    EXEC SQL UPDATE TB_ORD_MST
+        SET ORD_ST = '09'
+        WHERE ORD_NO = :v_ord_no;
+
+    /* 매도 취소시 매도가능수량 복원 */
+    if (strcmp(v_side, "SELL") == 0) {
+        EXEC SQL UPDATE TB_STK_BAL
+            SET SELL_AVAIL = SELL_AVAIL + (:v_qty - :v_exec_qty)
+            WHERE ACCT_NO = :v_acct;
+    }
+
+    IF_KRX_01(NULL, NULL);
+    CM_LOG_01("ST_CANCEL_01", v_acct, "주문취소");
+    return SUCCESS;
+}

@@ -1,0 +1,14 @@
+CREATE TABLE TB_KSD_IF (
+    IF_NO       NUMBER(12)    NOT NULL,
+    IF_DT       VARCHAR2(8),
+    IF_TP       VARCHAR2(10),
+    FUND_CD     VARCHAR2(12),
+    ACCT_NO     VARCHAR2(11),
+    QTY         NUMBER(15,2),
+    AMT         NUMBER(15,2),
+    SEND_ST     VARCHAR2(2)   DEFAULT '00',
+    RECV_ST     VARCHAR2(2),
+    ERR_CD      VARCHAR2(10),
+    CONSTRAINT PK_KSD_IF PRIMARY KEY (IF_NO)
+);
+COMMENT ON TABLE TB_KSD_IF IS 'KSD 인터페이스 전문';

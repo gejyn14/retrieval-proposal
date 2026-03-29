@@ -1,0 +1,21 @@
+/* 계좌번호 채번 처리 - 지점코드 기반 신규 계좌번호 생성 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_ACCT_GEN(const char *brnch_cd, char *acct_no) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_brnch[5];
+    long    v_seq;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_brnch, brnch_cd);
+
+    /* 시퀀스 채번 */
+    CM_SEQ_GEN("ACCT", &v_seq);
+
+    /* 지점코드(4) + 일련번호(6) + 체크(1) */
+    sprintf(acct_no, "%s%06ld%d", v_brnch, v_seq, (int)(v_seq % 10));
+
+    return SUCCESS;
+}

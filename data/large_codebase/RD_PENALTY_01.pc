@@ -1,0 +1,29 @@
+/* 조기환매 패널티 계산 처리 - 30일/90일 미만 보유 시 조기환매 위약금 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RD_PENALTY_01(const char *fund_cd, const char *buy_dt,
+                  double amt, double *penalty) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_fund[13];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_fund, fund_cd);
+
+    /* 보유일 계산 */
+    char today[9];
+    EXEC SQL SELECT TO_CHAR(SYSDATE,'YYYYMMDD') INTO :today FROM DUAL;
+    int hold_days = CM_DATE_CHK(buy_dt, today);
+
+    /* 30일 미만 조기환매 패널티 */
+    if (hold_days < 30) {
+        *penalty = amt * 0.02;  /* 2% 패널티 */
+    } else if (hold_days < 90) {
+        *penalty = amt * 0.01;  /* 1% 패널티 */
+    } else {
+        *penalty = 0;
+    }
+
+    return SUCCESS;
+}

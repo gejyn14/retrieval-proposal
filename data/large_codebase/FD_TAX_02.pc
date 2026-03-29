@@ -1,0 +1,32 @@
+/* 분배금 과세 처리 - 펀드 분배금 세율 조회 및 세액 산출, 비과세 계좌 면제 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int FD_TAX_02(double gross_amt, const char *acct_type, double *tax_amt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_type[3];
+    double  v_tax_rate;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_type, acct_type);
+
+    /* 비과세 계좌 */
+    if (strcmp(v_type, "03") == 0) {
+        *tax_amt = 0;
+        return SUCCESS;
+    }
+
+    /* 세율 조회 */
+    EXEC SQL SELECT TAX_RATE INTO :v_tax_rate
+        FROM TB_TAX_MST
+        WHERE TAX_TYPE = 'FUND_DIST' AND USE_YN = 'Y';
+
+    if (SQLCA.sqlcode != 0) {
+        CM_TAX_01(gross_amt, tax_amt);  /* 기본 세율 적용 */
+        return SUCCESS;
+    }
+
+    *tax_amt = gross_amt * v_tax_rate;
+    return SUCCESS;
+}

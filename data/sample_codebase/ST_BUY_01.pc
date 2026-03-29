@@ -1,0 +1,36 @@
+/* 주식 매수 주문 처리 */
+#include "proframe.h"
+#include "st_buy_str.h"
+
+int ST_BUY_01(st_buy_in_t *in, st_buy_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    double  avail_amt;
+    double  order_amt;
+    char    acct_no[11];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(acct_no, in->acct_no);
+    order_amt = in->price * in->qty;
+
+    /* 주문가능금액 확인 */
+    EXEC SQL SELECT AVAIL_AMT INTO :avail_amt
+        FROM TB_ACCT_BAL
+        WHERE ACCT_NO = :acct_no;
+
+    /* 증거금 계산 */
+    ST_MARGIN_01(in->stk_cd, order_amt, &out->margin_amt);
+
+    if (avail_amt < out->margin_amt) {
+        strcpy(out->err_cd, "E101");
+        strcpy(out->err_msg, "주문가능금액 부족");
+        return FAIL;
+    }
+
+    /* 주문 원장 등록 */
+    EXEC SQL INSERT INTO TB_ORD_MST
+        (ORD_NO, ACCT_NO, STK_CD, ORD_TP, PRICE, QTY, ORD_DT, ORD_ST)
+        VALUES (SQ_ORD_NO.NEXTVAL, :acct_no, :in->stk_cd,
+                'BUY', :in->price, :in->qty, TO_CHAR(SYSDATE,'YYYYMMDD'), '01');
+
+    return SUCCESS;
+}

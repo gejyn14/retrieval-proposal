@@ -1,0 +1,62 @@
+/* 반대매매 강제매도 처리 - 담보비율 미달 시 보유 주식 강제 시장가 매도 및 고객 알림 */
+#include "proframe.h"
+#include "st_sell_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int LN_FORCED_01(const char *acct_no) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    double  v_loan_bal;
+    double  v_coll_val;
+    char    v_stk_cd[7];
+    long    v_hold_qty;
+    double  v_cur_price;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+
+    /* 대출 잔액 */
+    EXEC SQL SELECT NVL(SUM(LOAN_BAL),0) INTO :v_loan_bal
+        FROM TB_LOAN_MST
+        WHERE ACCT_NO = :v_acct AND LOAN_ST = '01';
+
+    /* 담보 가치 */
+    EXEC SQL SELECT NVL(SUM(EVAL_AMT),0) INTO :v_coll_val
+        FROM TB_STK_BAL WHERE ACCT_NO = :v_acct;
+
+    /* 담보비율 140% 미만 시 반대매매 */
+    if (v_loan_bal > 0 && (v_coll_val / v_loan_bal * 100) < 140) {
+        /* 보유 종목 중 시가총액 큰 순서로 매도 */
+        EXEC SQL DECLARE c_forced CURSOR FOR
+            SELECT STK_CD, HOLD_QTY FROM TB_STK_BAL
+            WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0
+            ORDER BY EVAL_AMT DESC;
+
+        EXEC SQL OPEN c_forced;
+
+        while (v_coll_val / v_loan_bal * 100 < 140) {
+            EXEC SQL FETCH c_forced INTO :v_stk_cd, :v_hold_qty;
+            if (SQLCA.sqlcode != 0) break;
+
+            /* 시장가 매도 */
+            st_sell_in_t sell_in;
+            st_sell_out_t sell_out;
+            strcpy(sell_in.acct_no, v_acct);
+            strcpy(sell_in.stk_cd, v_stk_cd);
+            sell_in.qty = v_hold_qty;
+            sell_in.price = 0;  /* 시장가 */
+            ST_SELL_01(&sell_in, &sell_out);
+
+            v_coll_val -= sell_out.est_proceeds;
+        }
+
+        EXEC SQL CLOSE c_forced;
+
+        /* 고객 알림 */
+        CM_NOTIFY_01(v_acct, "FORCED_SELL", "반대매매 실행 안내");
+    }
+
+    CM_LOG_01("LN_FORCED_01", v_acct, "반대매매");
+    return SUCCESS;
+}

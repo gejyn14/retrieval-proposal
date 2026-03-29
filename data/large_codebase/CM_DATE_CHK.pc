@@ -1,0 +1,31 @@
+/* 영업일 일수 계산 처리 - 두 날짜 간 역일 차이에서 휴장일 제외한 영업일수 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_DATE_CHK(const char *from_dt, const char *to_dt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    int     diff_days;
+    int     holiday_cnt;
+    char    v_from[9];
+    char    v_to[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_from, from_dt);
+    strcpy(v_to, to_dt);
+
+    /* 역일 차이 */
+    EXEC SQL SELECT TO_DATE(:v_to,'YYYYMMDD') - TO_DATE(:v_from,'YYYYMMDD')
+        INTO :diff_days FROM DUAL;
+
+    /* 휴장일 제외 */
+    EXEC SQL SELECT COUNT(*) INTO :holiday_cnt
+        FROM TB_HOLIDAY
+        WHERE BASE_DT BETWEEN :v_from AND :v_to
+        AND USE_YN = 'Y';
+
+    /* 주말 제외 로직은 CM_HOLIDAY_CHK로 위임 */
+    CM_HOLIDAY_CHK(from_dt, "KRX");
+
+    return diff_days - holiday_cnt;
+}

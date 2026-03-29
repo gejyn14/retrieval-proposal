@@ -1,0 +1,40 @@
+/* 계좌 통합 처리 - 복수 계좌 잔고 이전, 현금 이체, 원계좌 해지 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int AC_MERGE_01(const char *from_acct, const char *to_acct, const char *auth_key) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_from[11];
+    char    v_to[11];
+    double  v_cash;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_from, from_acct);
+    strcpy(v_to, to_acct);
+
+    if (CM_AUTH_01(v_from, auth_key, 5) != SUCCESS) {
+        return FAIL;
+    }
+
+    /* 주식 잔고 이전 */
+    EXEC SQL UPDATE TB_STK_BAL SET ACCT_NO = :v_to
+        WHERE ACCT_NO = :v_from;
+
+    /* 현금 이체 */
+    EXEC SQL SELECT CASH_BAL INTO :v_cash
+        FROM TB_ACCT_BAL WHERE ACCT_NO = :v_from;
+
+    if (v_cash > 0) {
+        CM_TRANSFER_01(v_from, v_to, v_cash);
+    }
+
+    /* 원계좌 해지 */
+    EXEC SQL UPDATE TB_ACCT_MST
+        SET CLOSE_YN = 'Y', ACCT_ST = '09',
+            CLOSE_DT = TO_CHAR(SYSDATE,'YYYYMMDD')
+        WHERE ACCT_NO = :v_from;
+
+    CM_LOG_01("AC_MERGE_01", v_from, "계좌통합");
+    return SUCCESS;
+}

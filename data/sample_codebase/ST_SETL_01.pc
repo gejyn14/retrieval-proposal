@@ -1,0 +1,41 @@
+/* 주식 결제(수도) 처리 — T+2 매매확인 */
+#include "proframe.h"
+#include "st_setl_str.h"
+
+int ST_SETL_01(st_setl_in_t *in, st_setl_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    long    setl_qty;
+    double  setl_amt;
+    char    acct_no[11];
+    char    setl_dt[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(acct_no, in->acct_no);
+    strcpy(setl_dt, in->setl_dt);
+
+    /* 결제 대상 체결 내역 조회 */
+    EXEC SQL SELECT SUM(EXEC_QTY), SUM(EXEC_AMT)
+        INTO :setl_qty, :setl_amt
+        FROM TB_EXEC_HST
+        WHERE ACCT_NO = :acct_no
+        AND SETL_DT = :setl_dt
+        AND SETL_YN = 'N';
+
+    /* 잔고 원장 반영 */
+    EXEC SQL UPDATE TB_STK_BAL
+        SET QTY = QTY + :setl_qty,
+            AVG_PRC = (AVG_PRC * QTY + :setl_amt) / (QTY + :setl_qty)
+        WHERE ACCT_NO = :acct_no;
+
+    /* 예수금 차감 */
+    EXEC SQL UPDATE TB_ACCT_BAL
+        SET AVAIL_AMT = AVAIL_AMT - :setl_amt
+        WHERE ACCT_NO = :acct_no;
+
+    /* 결제 완료 처리 */
+    EXEC SQL UPDATE TB_EXEC_HST
+        SET SETL_YN = 'Y'
+        WHERE ACCT_NO = :acct_no AND SETL_DT = :setl_dt;
+
+    return SUCCESS;
+}

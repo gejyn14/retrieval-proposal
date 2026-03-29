@@ -1,0 +1,43 @@
+/* 계좌 잔고 통합 조회 처리 - 주식 채권 펀드 현금 전체 자산 평가액 조회 */
+#include "proframe.h"
+#include "jg_bal_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int JG_BAL_02(jg_bal_in_t *in, jg_bal_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    double  v_stk_eval;
+    double  v_bnd_eval;
+    double  v_fnd_eval;
+    double  v_cash;
+    int     v_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+
+    /* 주식 평가액 */
+    EXEC SQL SELECT NVL(SUM(EVAL_AMT),0), COUNT(*)
+        INTO :v_stk_eval, :v_cnt
+        FROM TB_STK_BAL WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0;
+    out->stk_eval = v_stk_eval;
+    out->item_cnt = v_cnt;
+
+    /* 채권 평가액 */
+    EXEC SQL SELECT NVL(SUM(EVAL_AMT),0) INTO :v_bnd_eval
+        FROM TB_BND_BAL WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0;
+    out->bnd_eval = v_bnd_eval;
+
+    /* 펀드 평가액 */
+    EXEC SQL SELECT NVL(SUM(EVAL_AMT),0) INTO :v_fnd_eval
+        FROM TB_FND_BAL WHERE ACCT_NO = :v_acct AND HOLD_QTY > 0;
+    out->fnd_eval = v_fnd_eval;
+
+    /* 현금 */
+    EXEC SQL SELECT CASH_BAL INTO :v_cash
+        FROM TB_ACCT_BAL WHERE ACCT_NO = :v_acct;
+    out->cash_bal = v_cash;
+
+    out->total_asset = v_stk_eval + v_bnd_eval + v_fnd_eval + v_cash;
+    return SUCCESS;
+}

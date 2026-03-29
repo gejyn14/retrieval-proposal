@@ -1,0 +1,27 @@
+/* 스트레스 테스트 처리 - 시장 급락 시나리오 극단적 손실 추정, VaR 대비 경고 알림 */
+#include "proframe.h"
+#include "rm_var_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RM_STRESS_01(const char *acct_no, double shock_rate, double *stress_loss) {
+    /* 정상 VaR 산출 */
+    rm_var_in_t var_in;
+    rm_var_out_t var_out;
+    strcpy(var_in.acct_no, acct_no);
+    strcpy(var_in.method, "HIST");
+    var_in.conf_level = 99;
+    var_in.hold_period = 10;  /* 10일 */
+
+    RM_VAR_01(&var_in, &var_out);
+
+    /* 스트레스 시나리오: 지수 shock_rate% 급락 시 */
+    *stress_loss = var_out.portfolio_val * (shock_rate / 100.0);
+
+    /* 극단적 손실이 VaR의 3배 초과 시 경고 */
+    if (*stress_loss > var_out.var_amt * 3) {
+        CM_NOTIFY_01("RISK_MGR", "STRESS", "극단적 손실 경고");
+    }
+
+    return SUCCESS;
+}

@@ -1,0 +1,19 @@
+/* KSD SAFE+ 분배금 지급 인터페이스 생성 */
+#include "proframe.h"
+
+int FD_KSD_IF_01(fd_pay_in_t *in, fd_pay_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char ref_no[20];
+    EXEC SQL END DECLARE SECTION;
+
+    /* KSD 전문 생성 */
+    EXEC SQL INSERT INTO TB_KSD_IF_DIST
+        (REF_NO, FUND_CD, PAY_DT, PAY_AMT, SEND_YN)
+        VALUES (SQ_KSD_REF.NEXTVAL, :in->fund_cd,
+                :in->pay_dt, :out->net_amt, 'N');
+
+    EXEC SQL SELECT SQ_KSD_REF.CURRVAL INTO :ref_no FROM DUAL;
+    strcpy(out->ksd_ref_no, ref_no);
+
+    return SUCCESS;
+}

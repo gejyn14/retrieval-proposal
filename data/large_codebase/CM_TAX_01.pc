@@ -1,0 +1,24 @@
+/* 공통 세금 계산 처리 - 소득세 주민세 원천징수 세액 산출 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_TAX_01(double amt, double *tax) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    double  tax_rate;
+    double  surtax_rate;
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL SELECT TAX_RATE, SURTAX_RATE INTO :tax_rate, :surtax_rate
+        FROM TB_TAX_MST
+        WHERE TAX_TYPE = 'DEFAULT'
+        AND USE_YN = 'Y';
+
+    if (SQLCA.sqlcode != 0) {
+        *tax = 0;
+        return FAIL;
+    }
+
+    *tax = amt * tax_rate * (1 + surtax_rate);
+    return SUCCESS;
+}

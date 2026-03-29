@@ -1,0 +1,24 @@
+/* 주식 잔고 조회 — 계좌별 보유종목 */
+#include "proframe.h"
+#include "jg_bal_str.h"
+
+int JG_BAL_02(jg_bal_in_t *in, jg_bal_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char acct_no[11];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(acct_no, in->acct_no);
+
+    EXEC SQL DECLARE c_bal CURSOR FOR
+        SELECT B.STK_CD, B.QTY, B.AVG_PRC,
+               S.STK_NM, S.CUR_PRC
+        FROM TB_STK_BAL B, TB_STK_MST S
+        WHERE B.ACCT_NO = :acct_no
+        AND B.STK_CD = S.STK_CD
+        AND B.QTY > 0
+        ORDER BY B.STK_CD;
+
+    EXEC SQL OPEN c_bal;
+    /* ... fetch loop ... */
+    return SUCCESS;
+}

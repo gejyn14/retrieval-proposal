@@ -1,0 +1,52 @@
+/* 주식 매도 주문 처리 - 매도가능수량 확인, 선차감, 주문 등록, 거래소 전송 */
+#include "proframe.h"
+#include "st_sell_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int ST_SELL_01(st_sell_in_t *in, st_sell_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    acct_no[11];
+    char    stk_cd[7];
+    long    sell_avail;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(acct_no, in->acct_no);
+    strcpy(stk_cd, in->stk_cd);
+
+    /* 매도가능수량 확인 */
+    EXEC SQL SELECT SELL_AVAIL INTO :sell_avail
+        FROM TB_STK_BAL
+        WHERE ACCT_NO = :acct_no AND STK_CD = :stk_cd;
+
+    if (SQLCA.sqlcode != 0 || sell_avail < in->qty) {
+        strcpy(out->err_cd, "E301");
+        strcpy(out->err_msg, "매도가능수량 부족");
+        return FAIL;
+    }
+
+    /* 호가 단위 검증 */
+    ST_LOT_01(stk_cd, in->price);
+
+    /* 매도가능수량 차감 (선차감) */
+    EXEC SQL UPDATE TB_STK_BAL
+        SET SELL_AVAIL = SELL_AVAIL - :in->qty
+        WHERE ACCT_NO = :acct_no AND STK_CD = :stk_cd;
+
+    /* 주문 원장 등록 */
+    EXEC SQL INSERT INTO TB_ORD_MST
+        (ORD_NO, ACCT_NO, STK_CD, ORD_TP, ORD_SIDE, PRICE, QTY, ORD_DT, ORD_ST)
+        VALUES (SQ_ORD_NO.NEXTVAL, :acct_no, :stk_cd,
+                :in->ord_type, 'SELL', :in->price, :in->qty,
+                TO_CHAR(SYSDATE,'YYYYMMDD'), '01');
+
+    /* 거래소 전송 */
+    IF_KRX_01(NULL, NULL);
+
+    /* 예상 수익/세금 */
+    out->est_proceeds = in->price * in->qty;
+    CM_TAX_01(out->est_proceeds, &out->est_tax);
+
+    CM_LOG_01("ST_SELL_01", acct_no, "매도주문");
+    return SUCCESS;
+}

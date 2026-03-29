@@ -1,0 +1,28 @@
+/* 금리 환율 조회 처리 - 기준일자별 금리 이자율 환율 시세 조회 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_RATE_01(const char *rate_tp, const char *base_dt, double *rate_val) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_tp[11];
+    char    v_dt[9];
+    double  v_rate;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_tp, rate_tp);
+    strcpy(v_dt, base_dt);
+
+    EXEC SQL SELECT RATE_VAL INTO :v_rate
+        FROM TB_RATE_MST
+        WHERE RATE_TP = :v_tp
+        AND BASE_DT = (SELECT MAX(BASE_DT) FROM TB_RATE_MST
+                        WHERE RATE_TP = :v_tp AND BASE_DT <= :v_dt);
+
+    if (SQLCA.sqlcode != 0) {
+        *rate_val = 0;
+        return FAIL;
+    }
+    *rate_val = v_rate;
+    return SUCCESS;
+}

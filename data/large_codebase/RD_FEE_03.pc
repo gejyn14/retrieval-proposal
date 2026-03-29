@@ -1,0 +1,40 @@
+/* 수익증권 환매 수수료 계산 처리 - 보유기간별 후취 수수료율 적용, 수수료 금액 및 세금 산출 */
+#include "proframe.h"
+#include "rd_fee_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RD_FEE_03(rd_fee_in_t *in, rd_fee_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    fund_cd[13];
+    double  fee_rate;
+    int     hold_days;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(fund_cd, in->fund_cd);
+
+    /* 보유일수 계산 */
+    hold_days = CM_DATE_CHK(in->buy_dt, in->sell_dt);
+    out->hold_days = hold_days;
+
+    /* 보유기간별 수수료율 조회 */
+    EXEC SQL SELECT FEE_RATE INTO :fee_rate
+        FROM TB_FEE_RATE
+        WHERE FUND_CD = :fund_cd
+        AND :hold_days BETWEEN FR_DAYS AND TO_DAYS
+        AND USE_YN = 'Y';
+
+    if (SQLCA.sqlcode != 0) {
+        fee_rate = 0;  /* 수수료 면제 구간 */
+    }
+
+    out->fee_rate = fee_rate;
+    out->fee_amt = in->sell_amt * fee_rate;
+
+    /* 수수료에 대한 세금 */
+    CM_TAX_01(out->fee_amt, &out->tax_amt);
+
+    out->net_amt = in->sell_amt - out->fee_amt - out->tax_amt;
+
+    return SUCCESS;
+}

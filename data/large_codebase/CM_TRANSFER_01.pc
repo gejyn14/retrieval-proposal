@@ -1,0 +1,39 @@
+/* 계좌 간 이체 공통 처리 - 출금 입금 대체 자금이동 잔액 갱신 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_TRANSFER_01(const char *from_acct, const char *to_acct, double amt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_from[11];
+    char    v_to[11];
+    double  v_amt;
+    double  v_avail;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_from, from_acct);
+    strcpy(v_to, to_acct);
+    v_amt = amt;
+
+    /* 출금 계좌 잔액 확인 */
+    EXEC SQL SELECT AVAIL_AMT INTO :v_avail
+        FROM TB_ACCT_BAL WHERE ACCT_NO = :v_from;
+
+    if (v_avail < v_amt) {
+        return FAIL;
+    }
+
+    /* 출금 */
+    EXEC SQL UPDATE TB_ACCT_BAL
+        SET CASH_BAL = CASH_BAL - :v_amt, AVAIL_AMT = AVAIL_AMT - :v_amt
+        WHERE ACCT_NO = :v_from;
+
+    /* 입금 */
+    EXEC SQL UPDATE TB_ACCT_BAL
+        SET CASH_BAL = CASH_BAL + :v_amt, AVAIL_AMT = AVAIL_AMT + :v_amt
+        WHERE ACCT_NO = :v_to;
+
+    CM_LOG_01("CM_TRANSFER_01", v_from, "이체출금");
+
+    return SUCCESS;
+}

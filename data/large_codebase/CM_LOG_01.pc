@@ -1,0 +1,27 @@
+/* 거래 로그 기록 공통 - 모든 서비스 호출 시 거래내역 이력 저장 처리 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int CM_LOG_01(const char *svc_nm, const char *acct_no, const char *tx_desc) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_svc[21];
+    char    v_acct[11];
+    char    v_desc[201];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_svc, svc_nm);
+    strcpy(v_acct, acct_no);
+    strcpy(v_desc, tx_desc);
+
+    EXEC SQL INSERT INTO TB_TX_HIST
+        (TX_NO, TX_DT, TX_TM, SVC_NM, ACCT_NO, TX_TP, TX_DESC, RESULT_CD)
+        VALUES (SQ_TX_NO.NEXTVAL, TO_CHAR(SYSDATE,'YYYYMMDD'),
+                TO_CHAR(SYSDATE,'HH24MISS'), :v_svc, :v_acct, 'NORMAL',
+                :v_desc, '0000');
+
+    if (SQLCA.sqlcode != 0) {
+        return FAIL;
+    }
+    return SUCCESS;
+}

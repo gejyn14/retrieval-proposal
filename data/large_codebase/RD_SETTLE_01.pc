@@ -1,0 +1,25 @@
+/* 환매 결제 처리 - 환매대금 계좌 입금, KSD 결제 통보 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int RD_SETTLE_01(const char *acct_no, const char *fund_cd, double net_amt) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_fund[13];
+    double  v_amt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+    strcpy(v_fund, fund_cd);
+    v_amt = net_amt;
+
+    /* 환매대금 입금 */
+    CM_TRANSFER_01("FUND_REDEEM_ACCT", v_acct, v_amt);
+
+    /* KSD 결제 통보 */
+    IF_KSD_01(NULL, NULL);
+
+    CM_LOG_01("RD_SETTLE_01", v_acct, "환매결제");
+    return SUCCESS;
+}

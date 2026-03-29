@@ -1,0 +1,19 @@
+/* 주식 증거금 계산 */
+#include "proframe.h"
+
+int ST_MARGIN_01(char *stk_cd, double ord_amt, double *margin) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    double margin_rate;
+    char   stk[7];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(stk, stk_cd);
+
+    EXEC SQL SELECT MARGIN_RATE INTO :margin_rate
+        FROM TB_MARGIN_RATE
+        WHERE STK_CD = :stk
+        AND USE_YN = 'Y';
+
+    *margin = ord_amt * margin_rate;
+    return SUCCESS;
+}

@@ -1,0 +1,51 @@
+/* 신용 대출 실행 처리 - 대출 한도 체크, 금리 조회, 대출 원장 등록, 대출금 입금 */
+#include "proframe.h"
+#include "ln_credit_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int LN_CREDIT_01(ln_credit_in_t *in, ln_credit_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    double  v_int_rate;
+    char    v_due_dt[9];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, in->acct_no);
+
+    /* 대출 한도 체크 */
+    if (CM_LIMIT_CHK("LOAN", v_acct, in->loan_amt) != SUCCESS) {
+        strcpy(out->err_cd, "EA01");
+        strcpy(out->err_msg, "대출한도 초과");
+        return FAIL;
+    }
+
+    /* 금리 조회 */
+    CM_RATE_01("LOAN_BASE", "", &v_int_rate);
+    v_int_rate += 0.015;  /* 가산금리 1.5% */
+    out->int_rate = v_int_rate;
+
+    /* 만기일 계산 */
+    EXEC SQL SELECT TO_CHAR(SYSDATE + :in->loan_days, 'YYYYMMDD')
+        INTO :v_due_dt FROM DUAL;
+    strcpy(out->due_dt, v_due_dt);
+
+    /* 대출 원장 등록 */
+    EXEC SQL INSERT INTO TB_LOAN_MST
+        (LOAN_NO, ACCT_NO, LOAN_TP, LOAN_AMT, LOAN_BAL, INT_RATE,
+         LOAN_DT, DUE_DT, LOAN_ST, COLL_TP)
+        VALUES (SQ_LOAN.NEXTVAL, :v_acct, :in->loan_tp,
+                :in->loan_amt, :in->loan_amt, :v_int_rate,
+                TO_CHAR(SYSDATE,'YYYYMMDD'), :v_due_dt, '01', :in->coll_tp);
+
+    /* 대출금 입금 */
+    EXEC SQL UPDATE TB_ACCT_BAL
+        SET CASH_BAL = CASH_BAL + :in->loan_amt,
+            LOAN_AMT = LOAN_AMT + :in->loan_amt
+        WHERE ACCT_NO = :v_acct;
+
+    out->approved_amt = in->loan_amt;
+
+    CM_LOG_01("LN_CREDIT_01", v_acct, "신용대출실행");
+    return SUCCESS;
+}

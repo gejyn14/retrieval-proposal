@@ -1,0 +1,32 @@
+/* KYC 적합성 검증 처리 - 고객 본인확인 투자자 적합성 검증, AML 자금세탁 방지 확인 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int AC_KYC_CHK(const char *cust_no, int *kyc_result) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_cust[11];
+    int     v_kyc_level;
+    char    v_aml_yn[2];
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_cust, cust_no);
+
+    EXEC SQL SELECT KYC_LEVEL, AML_YN INTO :v_kyc_level, :v_aml_yn
+        FROM TB_CUST_MST
+        WHERE CUST_NO = :v_cust;
+
+    if (SQLCA.sqlcode != 0) {
+        *kyc_result = -1;
+        return FAIL;
+    }
+
+    /* AML 의심 고객 */
+    if (v_aml_yn[0] == 'Y') {
+        *kyc_result = 0;
+        return FAIL;
+    }
+
+    *kyc_result = v_kyc_level;
+    return SUCCESS;
+}

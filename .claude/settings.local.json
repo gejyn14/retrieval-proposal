@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__proc-retrieval__search_code",
+      "Bash(xargs -I {} basename {})",
+      "Bash(python:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "proc-retrieval"
+  ]
+}

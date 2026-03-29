@@ -1,0 +1,32 @@
+/* 국세청 신고 인터페이스 처리 - 연간 세금 집계 및 국세청 전문 생성 전송 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int IF_TAX_01(const char *report_tp, const char *base_year) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_tp[5];
+    char    v_year[5];
+    double  v_total_tax;
+    int     v_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_tp, report_tp);
+    strcpy(v_year, base_year);
+
+    /* 연간 세금 집계 */
+    EXEC SQL SELECT COUNT(*), NVL(SUM(TX_AMT),0)
+        INTO :v_cnt, :v_total_tax
+        FROM TB_TX_HIST
+        WHERE TX_TP LIKE 'TAX%'
+        AND TX_DT LIKE :v_year || '%';
+
+    /* 국세청 전문 생성 */
+    EXEC SQL INSERT INTO TB_TX_HIST
+        (TX_NO, TX_DT, SVC_NM, TX_TP, TX_AMT, TX_DESC)
+        VALUES (SQ_TX_NO.NEXTVAL, TO_CHAR(SYSDATE,'YYYYMMDD'),
+                'IF_TAX_01', 'NTS_REPORT', :v_total_tax, '국세청신고');
+
+    CM_LOG_01("IF_TAX_01", "BATCH", "국세청신고");
+    return SUCCESS;
+}

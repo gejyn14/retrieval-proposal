@@ -1,0 +1,69 @@
+/* T+2 결제 처리 - 체결 건 대금 결제, 매수 현금차감 잔고증가, 매도 현금증가 잔고차감 */
+#include "proframe.h"
+#include "st_setl_str.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int ST_SETL_01(st_setl_in_t *in, st_setl_out_t *out) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_setl_dt[9];
+    char    v_acct[11];
+    char    v_stk_cd[7];
+    char    v_side[5];
+    double  v_exec_amt;
+    long    v_exec_qty;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_setl_dt, in->setl_dt);
+
+    /* 당일 결제 대상 체결 조회 */
+    EXEC SQL DECLARE c_setl CURSOR FOR
+        SELECT ACCT_NO, STK_CD, EXEC_SIDE, EXEC_AMT, EXEC_QTY
+        FROM TB_EXEC_HST
+        WHERE SETL_DT = :v_setl_dt AND SETL_ST = '00';
+
+    EXEC SQL OPEN c_setl;
+
+    while (1) {
+        EXEC SQL FETCH c_setl
+            INTO :v_acct, :v_stk_cd, :v_side, :v_exec_amt, :v_exec_qty;
+        if (SQLCA.sqlcode != 0) break;
+
+        if (strcmp(v_side, "BUY") == 0) {
+            /* 매수 결제: 현금 차감 + 잔고 증가 */
+            EXEC SQL UPDATE TB_ACCT_BAL
+                SET CASH_BAL = CASH_BAL - :v_exec_amt
+                WHERE ACCT_NO = :v_acct;
+            EXEC SQL UPDATE TB_STK_BAL
+                SET HOLD_QTY = HOLD_QTY + :v_exec_qty,
+                    SELL_AVAIL = SELL_AVAIL + :v_exec_qty
+                WHERE ACCT_NO = :v_acct AND STK_CD = :v_stk_cd;
+        } else {
+            /* 매도 결제: 현금 증가 + 잔고 차감 */
+            EXEC SQL UPDATE TB_ACCT_BAL
+                SET CASH_BAL = CASH_BAL + :v_exec_amt
+                WHERE ACCT_NO = :v_acct;
+            EXEC SQL UPDATE TB_STK_BAL
+                SET HOLD_QTY = HOLD_QTY - :v_exec_qty
+                WHERE ACCT_NO = :v_acct AND STK_CD = :v_stk_cd;
+        }
+
+        /* 결제 완료 처리 */
+        EXEC SQL UPDATE TB_EXEC_HST SET SETL_ST = '01'
+            WHERE EXEC_NO = :in->exec_no;
+
+        /* 결제 원장 등록 */
+        EXEC SQL INSERT INTO TB_SETL_MST
+            (SETL_NO, EXEC_NO, ACCT_NO, SETL_TP, SETL_DT, SETL_AMT, SETL_ST)
+            VALUES (SQ_SETL.NEXTVAL, :in->exec_no, :v_acct,
+                    :v_side, :v_setl_dt, :v_exec_amt, '01');
+
+        /* KSD 통보 */
+        IF_KSD_01(NULL, NULL);
+    }
+
+    EXEC SQL CLOSE c_setl;
+
+    CM_LOG_01("ST_SETL_01", "BATCH", "T+2결제");
+    return SUCCESS;
+}

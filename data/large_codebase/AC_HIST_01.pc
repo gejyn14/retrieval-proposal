@@ -1,0 +1,26 @@
+/* 계좌 거래 이력 조회 처리 - 기간별 거래내역 조회 */
+#include "proframe.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int AC_HIST_01(const char *acct_no, const char *from_dt, const char *to_dt,
+               void *result_set, int *count) {
+    EXEC SQL BEGIN DECLARE SECTION;
+    char    v_acct[11];
+    char    v_from[9];
+    char    v_to[9];
+    int     v_cnt;
+    EXEC SQL END DECLARE SECTION;
+
+    strcpy(v_acct, acct_no);
+    strcpy(v_from, from_dt);
+    strcpy(v_to, to_dt);
+
+    EXEC SQL SELECT COUNT(*) INTO :v_cnt
+        FROM TB_TX_HIST
+        WHERE ACCT_NO = :v_acct
+        AND TX_DT BETWEEN :v_from AND :v_to;
+
+    *count = v_cnt;
+    return SUCCESS;
+}
