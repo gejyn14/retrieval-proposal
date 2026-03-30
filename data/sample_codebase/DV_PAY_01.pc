@@ -11,7 +11,7 @@ int DV_PAY_01(dv_pay_in_t *in, dv_pay_out_t *out) {
 
     strcpy(stk_cd, in->stk_cd);
 
-    EXEC SQL SELECT DIV_AMT INTO :div_per_share
+    EXEC SQL SELECT DIV_AMT INTO :div_per_shareㅎ
         FROM TB_DIV_MST
         WHERE STK_CD = :stk_cd AND DIV_DT = :in->div_dt;
 
